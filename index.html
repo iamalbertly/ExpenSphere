@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e2e;
+            color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 90%;
+            max-width: 600px;
+            background-color: #28293d;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #f5a623;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            background-color: #33344b;
+            color: #f5f5f5;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            resize: none;
+        }
+        textarea:focus {
+            outline: none;
+            border: 2px solid #f5a623;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: #f5a623;
+            color: #1e1e2f;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #d48821;
+        }
+        pre {
+            background-color: #33344b;
+            padding: 10px;
+            border-radius: 8px;
+            color: #a8d0e6;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            cursor: pointer;
+        }
+        .confidence {
+            text-align: center;
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        .editable {
+            background-color: #444a6f;
+            border: 1px solid #f5a623;
+            padding: 5px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Expense Tracker</h1>
+        <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
+        <button onclick="authorize()">Submit</button>
+        <h2>Generated JSON:</h2>
+        <pre id="output" onclick="makeEditable(event)">Start typing to see the JSON...</pre>
+        <div class="confidence" id="confidence">Confidence Score: 0%</div>
+    </div>
+
+    <script>
+        const CLIENT_ID = "35324134118-gqbvjv3j7e80jcml7d6afku2nsco8vfe.apps.googleusercontent.com";
+
+        let trainingData = [
+            { category: "Petrol & Transport", keywords: ["petrol", "raum", "bmw", "fuel"] },
+            { category: "Car Maintenance & Fee's", keywords: ["repair", "maintenance", "oil", "service"] },
+            { category: "Groceries", keywords: ["milk", "groceries", "maid", "shopping"] },
+            { category: "Gift to Family & Friends", keywords: ["gift", "donation", "contribution", "help", "irene"] },
+            { category: "Utilities", keywords: ["luku", "electricity", "water", "gas", "trash"] },
+            { category: "Eating Out", keywords: ["food", "restaurant", "chips", "lunch"] },
+            { category: "Medical & Medicine", keywords: ["hospital", "medicine", "doctor"] },
+            { category: "Aaliyah Investment", keywords: ["aaliyah", "school", "karate", "hair"] },
+            { category: "Celebration", keywords: ["anniversary", "party", "event"] },
+            { category: "(OTHER)", keywords: ["miscellaneous", "unknown"] }
+        ];
+
+        let gapiLoaded = false;
+        let tokenClient;
+
+        document.getElementById("inputText").addEventListener("input", processInput);
+        document.getElementById("inputText").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault(); // Prevent default Enter behavior
+                authorize(); // Trigger submission
+            }
+        });
+
+        let generatedData = {};
+
+        function processInput() {
+            const input = document.getElementById("inputText").value.toLowerCase();
+            const amountMatch = input.match(/(\d{1,3}(?:,\d{3})*|[0-9]+)\s?k/i);
+            const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) * (amountMatch[0].includes('k') ? 1000 : 1) : null;
+
+            let category = "(OTHER)";
+            let matchedKeywords = [];
+            let totalKeywords = 0;
+
+            for (const { category: cat, keywords } of trainingData) {
+                const matches = keywords.filter(keyword => input.includes(keyword));
+                if (matches.length > 0 && matches.length > matchedKeywords.length) {
+                    category = cat;
+                    matchedKeywords = matches;
+                    totalKeywords = keywords.length;
+                }
+            }
+
+            const score = matchedKeywords.length > 0 ? Math.round((matchedKeywords.length / totalKeywords) * 100) : 0;
+
+            generatedData = {
+                "Date of Transaction": new Date().toISOString().split("T")[0],
+                "Where did the money come from?": "ALBERT",
+                "How much money? (Tsh)": amount || "Unknown",
+                "What's the Purchase Category": category,
+                "Purchase Description": input,
+                "Confidence Score": `${score}%`
+            };
+
+            document.getElementById("output").textContent = JSON.stringify(generatedData, null, 4);
+            document.getElementById("confidence").textContent = `Confidence Score: ${score}%`;
+        }
+
+        function makeEditable(event) {
+            const pre = event.target;
+            if (pre.isContentEditable) return;
+
+            pre.contentEditable = true;
+            pre.classList.add("editable");
+
+            pre.addEventListener("blur", () => {
+                try {
+                    generatedData = JSON.parse(pre.textContent);
+                    pre.contentEditable = false;
+                    pre.classList.remove("editable");
+                    alert("Updated JSON will now reinforce learning.");
+                    reinforceLearning(generatedData);
+                } catch (e) {
+                    alert("Invalid JSON format! Reverting changes.");
+                    pre.textContent = JSON.stringify(generatedData, null, 4);
+                }
+            });
+        }
+
+        function reinforceLearning(updatedData) {
+            const category = updatedData["What's the Purchase Category"];
+            const description = updatedData["Purchase Description"].toLowerCase();
+
+            const trainingEntry = trainingData.find(entry => entry.category === category);
+            if (trainingEntry) {
+                const newKeywords = description.split(" ").filter(word => !trainingEntry.keywords.includes(word));
+                trainingEntry.keywords.push(...newKeywords);
+            }
+        }
+
+        function loadGapiClient() {
+            return new Promise((resolve) => {
+                gapi.load("client", () => {
+                    gapi.client.init({}).then(() => {
+                        resolve();
+                    });
+                });
+            });
+        }
+
+        function authorize() {
+            if (!gapiLoaded) {
+                loadGapiClient().then(() => {
+                    tokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: CLIENT_ID,
+                        scope: "https://www.googleapis.com/auth/spreadsheets",
+                        callback: submitData
+                    });
+                    tokenClient.requestAccessToken();
+                });
+                gapiLoaded = true;
+            } else {
+                tokenClient.requestAccessToken();
+            }
+        }
+
+        function submitData(token) {
+            const values = [
+                [
+                    generatedData["Date of Transaction"],
+                    generatedData["Where did the money come from?"],
+                    generatedData["How much money? (Tsh)"],
+                    generatedData["What's the Purchase Category"],
+                    generatedData["Purchase Description"],
+                    generatedData["Confidence Score"]
+                ]
+            ];
+
+            gapi.client.sheets.spreadsheets.values.append({
+                spreadsheetId: "1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA",
+                range: "ExpenseResults",
+                valueInputOption: "USER_ENTERED",
+                resource: { values }
+            }).then(() => {
+                alert("Data submitted successfully!");
+                document.getElementById("inputText").value = ""; // Clear input field after submission
+            }).catch((error) => {
+                console.error("Error submitting data:", error.result.error.message);
+            });
+        }
+    </script>
+    <script src="https://apis.google.com/js/api.js"></script>
