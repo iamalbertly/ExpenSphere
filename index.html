@@ -28,6 +28,7 @@
         h1 {
             text-align: center;
             margin-bottom: 20px;
+            margin-top: 0;
             color: #f5a623;
         }
         textarea {
@@ -36,10 +37,9 @@
             background-color: #33344b;
             color: #f5f5f5;
             border: none;
-            padding: 10px;
+            padding: 5px;
             border-radius: 8px;
             font-size: 16px;
-            margin-bottom: 20px;
             resize: none;
         }
         textarea:focus {
@@ -90,7 +90,6 @@
         <h1>Expense Tracker</h1>
         <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
         <button onclick="authorize()">Submit</button>
-        <h2>Generated Data:</h2>
         <div class="editable-container" id="editableContainer"></div>
         <div class="confidence" id="confidence">Confidence Score: 0%</div>
     </div>
@@ -191,14 +190,17 @@
             `;
             container.appendChild(descriptionField);
 
-            // Confidence Score (Read-only)
-            const confidenceField = document.createElement("div");
-            confidenceField.className = "editable-field";
-            confidenceField.innerHTML = `
-                <label class="editable-label">Confidence Score</label>
-                <input type="text" class="editable-input" value="${data["Confidence Score"]}" readonly>
+            // Amount Field
+            const amountField = document.createElement("div");
+            amountField.className = "editable-field";
+            amountField.innerHTML = `
+                <label class="editable-label">How much money? (Tsh)</label>
+                <input type="number" class="editable-input" value="${data["How much money? (Tsh)"]}" onchange="updateField('How much money? (Tsh)', this.value)">
             `;
-            container.appendChild(confidenceField);
+            container.appendChild(amountField);
+
+            // Display Confidence Score as non-editable text
+            document.getElementById("confidence").textContent = `Confidence Score: ${data["Confidence Score"]}`;
         }
 
         function updateField(field, value) {
@@ -255,6 +257,7 @@
                 console.error("Error submitting data:", error.result.error.message);
             });
         }
+        document.getElementById("inputText").focus();
     </script>
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
