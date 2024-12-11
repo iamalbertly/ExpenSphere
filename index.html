@@ -109,7 +109,35 @@
             { category: "Medical & Medicine", keywords: ["hospital", "medicine", "doctor"] },
             { category: "Aaliyah Investment", keywords: ["aaliyah", "school", "karate", "hair"] },
             { category: "Celebration", keywords: ["anniversary", "party", "event"] },
-            { category: "(OTHER)", keywords: ["miscellaneous", "unknown"] }
+            { category: "(OTHER) Food, Transport, Groceries, etc.", keywords: ["miscellaneous", "unknown"] }
+        ];
+
+        const paidToOptions = [
+            "Spent on BMW",
+            "Spent on Raum",
+            "Gave to Maid (nyumbani)",
+            "Gave to Irene",
+            "Aaliyah School Fee",
+            "ALRADA - Expenses",
+            "Gave to Parents - Tina",
+            "Spent on Guta",
+            "Luku",
+            "Msiba",
+            "Medical Expenses",
+            "Eating Out",
+            "Groceries",
+            "Petrol & Transport",
+            "Car Maintenance & Fee's",
+            "Celebration",
+            "Gift to Family & Friends",
+            "Utilities",
+            "Aaliyah Investment",
+            "Home Investment",
+            "Rent",
+            "Personal",
+            "Phone Maintenance",
+            "Funeral",
+            "(OTHER) Food, Transport, Groceries, etc."
         ];
 
         let tokenClient;
@@ -128,7 +156,7 @@
             const amountMatch = input.match(/(\d{1,3}(?:,\d{3})*|[0-9]+)\s?k/i);
             const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) * (amountMatch[0].includes('k') ? 1000 : 1) : null;
 
-            let category = "(OTHER)";
+            let category = "(OTHER) Food, Transport, Groceries, etc.";
             let matchedKeywords = [];
             let totalKeywords = 0;
 
@@ -143,13 +171,23 @@
 
             const score = matchedKeywords.length > 0 ? Math.round((matchedKeywords.length / totalKeywords) * 100) : 0;
 
+            // Try to determine the best matching paidTo option based on the input and category
+            let paidTo = "(OTHER) Food, Transport, Groceries, etc.";
+            for (const option of paidToOptions) {
+                const optionLower = option.toLowerCase();
+                if (input.includes(optionLower) || category.toLowerCase().includes(optionLower)) {
+                    paidTo = option;
+                    break;
+                }
+            }
+
             generatedData = {
                 "Date of Transaction": new Date().toISOString().split("T")[0],
                 "Where did the money come from?": "ALBERT",
                 "How much money? (Tsh)": amount || "Unknown",
                 "What's the Purchase Category": category,
                 "Purchase Description": input,
-                "Where was the money payed to?": "",
+                "Where was the money payed to?": paidTo,
                 "Confidance level": `${score}%`
             };
 
@@ -161,6 +199,7 @@
             const container = document.getElementById("editableContainer");
             container.innerHTML = "";
 
+            // Date Field
             const dateField = document.createElement("div");
             dateField.className = "editable-field";
             dateField.innerHTML = `
@@ -169,6 +208,7 @@
             `;
             container.appendChild(dateField);
 
+            // Category Field
             const categoryField = document.createElement("div");
             categoryField.className = "editable-field";
             const options = trainingData.map(entry => `<option value="${entry.category}" ${entry.category === data["What's the Purchase Category"] ? "selected" : ""}>${entry.category}</option>`).join("");
@@ -180,6 +220,7 @@
             `;
             container.appendChild(categoryField);
 
+            // Description Field
             const descriptionField = document.createElement("div");
             descriptionField.className = "editable-field";
             descriptionField.innerHTML = `
@@ -188,6 +229,7 @@
             `;
             container.appendChild(descriptionField);
 
+            // Amount Field
             const amountField = document.createElement("div");
             amountField.className = "editable-field";
             amountField.innerHTML = `
@@ -196,14 +238,21 @@
             `;
             container.appendChild(amountField);
 
+            // Paid To Field as Select
             const paidToField = document.createElement("div");
             paidToField.className = "editable-field";
+            const paidToOptionsHtml = paidToOptions
+                .map(option => `<option value="${option}" ${option === data["Where was the money payed to?"] ? "selected" : ""}>${option}</option>`)
+                .join("");
             paidToField.innerHTML = `
                 <label class="editable-label">Where was the money payed to?</label>
-                <input type="text" class="editable-input" value="${data["Where was the money payed to?"]}" onchange="updateField('Where was the money payed to?', this.value)">
+                <select class="editable-select" onchange="updateField('Where was the money payed to?', this.value)">
+                    ${paidToOptionsHtml}
+                </select>
             `;
             container.appendChild(paidToField);
 
+            // Confidence Score (Read-only)
             const confidenceField = document.createElement("div");
             confidenceField.className = "editable-field";
             confidenceField.innerHTML = `
