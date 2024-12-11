@@ -149,7 +149,8 @@
                 "How much money? (Tsh)": amount || "Unknown",
                 "What's the Purchase Category": category,
                 "Purchase Description": input,
-                "Confidence Score": `${score}%`
+                "Where was the money payed to?": "",
+                "Confidance level": `${score}%`
             };
 
             displayEditableFields(generatedData);
@@ -195,11 +196,19 @@
             `;
             container.appendChild(amountField);
 
+            const paidToField = document.createElement("div");
+            paidToField.className = "editable-field";
+            paidToField.innerHTML = `
+                <label class="editable-label">Where was the money payed to?</label>
+                <input type="text" class="editable-input" value="${data["Where was the money payed to?"]}" onchange="updateField('Where was the money payed to?', this.value)">
+            `;
+            container.appendChild(paidToField);
+
             const confidenceField = document.createElement("div");
             confidenceField.className = "editable-field";
             confidenceField.innerHTML = `
-                <label class="editable-label">Confidence Score</label>
-                <input type="text" class="editable-input" value="${data["Confidence Score"]}" readonly>
+                <label class="editable-label">Confidance level</label>
+                <input type="text" class="editable-input" value="${data["Confidance level"]}" readonly>
             `;
             container.appendChild(confidenceField);
         }
@@ -208,7 +217,55 @@
             generatedData[field] = value;
         }
 
-        function authorize() {
+        // Function to check if stored token is still valid
+        function isTokenValid(token) {
+            if (!token) return false;
+            
+            return fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults!A1`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            )
+            .then(response => response.ok)
+            .catch(() => false);
+        }
+
+        // Function to handle the token storage
+        function storeToken(token) {
+            localStorage.setItem('expenseTrackerToken', token);
+            localStorage.setItem('tokenTimestamp', new Date().getTime());
+        }
+
+        // Function to get stored token
+        function getStoredToken() {
+            return localStorage.getItem('expenseTrackerToken');
+        }
+
+        // Function to clear stored token
+        function clearStoredToken() {
+            localStorage.removeItem('expenseTrackerToken');
+            localStorage.removeItem('tokenTimestamp');
+        }
+
+        // Modified authorize function
+        async function authorize() {
+            const storedToken = getStoredToken();
+            
+            if (storedToken) {
+                // Check if stored token is still valid
+                const isValid = await isTokenValid(storedToken);
+                if (isValid) {
+                    submitData(storedToken);
+                    return;
+                } else {
+                    clearStoredToken();
+                }
+            }
+
+            // If no valid token, request new one
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
@@ -221,8 +278,12 @@
             if (response.error) {
                 console.error("OAuth Error:", response);
                 alert(`Authorization failed: ${response.error}. Please try again.`);
+                clearStoredToken();
                 return;
             }
+            
+            // Store the new token
+            storeToken(response.access_token);
             submitData(response.access_token);
         }
 
@@ -234,53 +295,84 @@
                     generatedData["How much money? (Tsh)"],
                     generatedData["What's the Purchase Category"],
                     generatedData["Purchase Description"],
-                    generatedData["Confidence Score"]
+                    generatedData["Where was the money payed to?"],
+                    generatedData["Confidance level"]
                 ]
             ];
 
+            // First, get the last row with data
             fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults:append?valueInputOption=USER_ENTERED`,
+                `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults!A:G`,
                 {
-                    method: "POST",
                     headers: {
                         Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({
-                        range: "ExpenseResults",
-                        values: values,
-                    }),
                 }
             )
-                .then(async (response) => {
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            .then(async (response) => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        clearStoredToken(); // Clear invalid token
+                        throw new Error("Token expired. Please try again.");
                     }
-                    return response.json();
-                })
-                .then(() => {
-                    alert("Data submitted successfully!");
-                    document.getElementById("inputText").value = "";
-                    document.getElementById("editableContainer").innerHTML = "";
-                    document.getElementById("confidence").textContent = "Confidence Score: 0%";
-                })
-                .catch((error) => {
-                    console.error("Detailed error:", error);
-                    let errorMessage = "Failed to submit data. ";
-                    
-                    if (error.message.includes("401")) {
-                        errorMessage += "Authentication failed. Please try submitting again.";
-                    } else if (error.message.includes("403")) {
-                        errorMessage += "You don't have permission to access this spreadsheet. Please check your access rights.";
-                    } else if (error.message.includes("404")) {
-                        errorMessage += "Spreadsheet not found. Please verify the spreadsheet ID.";
-                    } else {
-                        errorMessage += error.message;
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                }
+                return response.json();
+            })
+            .then((data) => {
+                const lastRow = data.values ? data.values.length + 1 : 1;
+                const range = `ExpenseResults!A${lastRow}`;
+
+                return fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            range: range,
+                            values: values,
+                        }),
                     }
-                    
-                    alert(errorMessage);
-                });
+                );
+            })
+            .then(async (response) => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        clearStoredToken(); // Clear invalid token
+                        throw new Error("Token expired. Please try again.");
+                    }
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert("Data submitted successfully!");
+                document.getElementById("inputText").value = "";
+                document.getElementById("editableContainer").innerHTML = "";
+                document.getElementById("confidence").textContent = "Confidence Score: 0%";
+            })
+            .catch((error) => {
+                console.error("Detailed error:", error);
+                let errorMessage = "Failed to submit data. ";
+                
+                if (error.message.includes("401") || error.message.includes("Token expired")) {
+                    errorMessage += "Authentication expired. Please try submitting again.";
+                    clearStoredToken();
+                } else if (error.message.includes("403")) {
+                    errorMessage += "You don't have permission to access this spreadsheet. Please check your access rights.";
+                } else if (error.message.includes("404")) {
+                    errorMessage += "Spreadsheet not found. Please verify the spreadsheet ID.";
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                alert(errorMessage);
+            });
         }
     </script>
     <script src="https://apis.google.com/js/api.js"></script>
