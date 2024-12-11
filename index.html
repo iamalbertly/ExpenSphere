@@ -95,10 +95,10 @@
     </div>
 
     <script>
-        const CLIENT_ID = "35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com";
-        const REDIRECT_URI = "http://localhost";
+        const CLIENT_ID = "35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com";
+        const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 
-        let trainingData = [
+        const trainingData = [
             { category: "Petrol & Transport", keywords: ["petrol", "raum", "bmw", "fuel"] },
             { category: "Car Maintenance & Fee's", keywords: ["repair", "maintenance", "oil", "service"] },
             { category: "Groceries", keywords: ["milk", "groceries", "maid", "shopping"] },
@@ -112,8 +112,6 @@
         ];
 
         let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
         let generatedData = {};
 
         document.getElementById("inputText").addEventListener("input", processInput);
@@ -161,7 +159,6 @@
             const container = document.getElementById("editableContainer");
             container.innerHTML = "";
 
-            // Date Picker
             const dateField = document.createElement("div");
             dateField.className = "editable-field";
             dateField.innerHTML = `
@@ -170,7 +167,6 @@
             `;
             container.appendChild(dateField);
 
-            // Category Dropdown
             const categoryField = document.createElement("div");
             categoryField.className = "editable-field";
             const options = trainingData.map(entry => `<option value="${entry.category}" ${entry.category === data["What's the Purchase Category"] ? "selected" : ""}>${entry.category}</option>`).join("");
@@ -182,16 +178,14 @@
             `;
             container.appendChild(categoryField);
 
-            // Description Textarea
             const descriptionField = document.createElement("div");
             descriptionField.className = "editable-field";
             descriptionField.innerHTML = `
                 <label class="editable-label">Purchase Description</label>
-                <textarea class="editable-input" onchange="updateField('Purchase Description', this.value)">${data["Purchase Description"]}</textarea>
+                <textarea class="editable-input" onchange="updateField('Purchase Description', this.value)" rows="3">${data["Purchase Description"]}</textarea>
             `;
             container.appendChild(descriptionField);
 
-            // Amount Field
             const amountField = document.createElement("div");
             amountField.className = "editable-field";
             amountField.innerHTML = `
@@ -200,7 +194,13 @@
             `;
             container.appendChild(amountField);
 
-            document.getElementById("confidence").textContent = `Confidence Score: ${data["Confidence Score"]}`;
+            const confidenceField = document.createElement("div");
+            confidenceField.className = "editable-field";
+            confidenceField.innerHTML = `
+                <label class="editable-label">Confidence Score</label>
+                <input type="text" class="editable-input" value="${data["Confidence Score"]}" readonly>
+            `;
+            container.appendChild(confidenceField);
         }
 
         function updateField(field, value) {
@@ -210,16 +210,16 @@
         function authorize() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
-                scope: "https://www.googleapis.com/auth/spreadsheets",
-                callback: handleTokenResponse
+                scope: SCOPES,
+                callback: handleAuthResponse
             });
             tokenClient.requestAccessToken();
         }
 
-        function handleTokenResponse(response) {
+        function handleAuthResponse(response) {
             if (response.error) {
                 console.error("OAuth Error", response);
-                alert("Authorization failed.");
+                alert("Authorization failed. Ensure the redirect URI is set correctly.");
             } else {
                 submitData(response.access_token);
             }
@@ -237,18 +237,34 @@
                 ]
             ];
 
-            gapi.client.sheets.spreadsheets.values.append({
-                spreadsheetId: "1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA",
-                range: "ExpenseResults",
-                valueInputOption: "USER_ENTERED",
-                resource: { values }
-            }).then(() => {
-                alert("Data submitted successfully!");
-                document.getElementById("inputText").value = "";
-            }).catch(error => {
-                console.error("Error submitting data:", error);
-                alert("Failed to submit data.");
-            });
+            fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/YOUR_SPREADSHEET_ID/values/ExpenseResults:append?valueInputOption=USER_ENTERED`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        range: "ExpenseResults",
+                        values: values,
+                    }),
+                }
+            )
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error("Network response was not ok" + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(() => {
+                    alert("Data submitted successfully!");
+                    document.getElementById("inputText").value = "";
+                })
+                .catch((error) => {
+                    console.error("Error submitting data:", error);
+                    alert("Failed to submit data. Check your spreadsheet permissions and token.");
+                });
         }
     </script>
     <script src="https://apis.google.com/js/api.js"></script>
