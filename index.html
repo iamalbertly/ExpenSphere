@@ -97,6 +97,7 @@
     <script>
         const CLIENT_ID = "35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com";
         const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
+        const SPREADSHEET_ID = "1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA";
 
         const trainingData = [
             { category: "Petrol & Transport", keywords: ["petrol", "raum", "bmw", "fuel"] },
@@ -218,11 +219,11 @@
 
         function handleAuthResponse(response) {
             if (response.error) {
-                console.error("OAuth Error", response);
-                alert("Authorization failed. Ensure the redirect URI is set correctly.");
-            } else {
-                submitData(response.access_token);
+                console.error("OAuth Error:", response);
+                alert(`Authorization failed: ${response.error}. Please try again.`);
+                return;
             }
+            submitData(response.access_token);
         }
 
         function submitData(token) {
@@ -238,7 +239,7 @@
             ];
 
             fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/YOUR_SPREADSHEET_ID/values/ExpenseResults:append?valueInputOption=USER_ENTERED`,
+                `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults:append?valueInputOption=USER_ENTERED`,
                 {
                     method: "POST",
                     headers: {
@@ -251,19 +252,34 @@
                     }),
                 }
             )
-                .then((response) => {
+                .then(async (response) => {
                     if (!response.ok) {
-                        throw new Error("Network response was not ok" + response.statusText);
+                        const errorText = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
                     }
                     return response.json();
                 })
                 .then(() => {
                     alert("Data submitted successfully!");
                     document.getElementById("inputText").value = "";
+                    document.getElementById("editableContainer").innerHTML = "";
+                    document.getElementById("confidence").textContent = "Confidence Score: 0%";
                 })
                 .catch((error) => {
-                    console.error("Error submitting data:", error);
-                    alert("Failed to submit data. Check your spreadsheet permissions and token.");
+                    console.error("Detailed error:", error);
+                    let errorMessage = "Failed to submit data. ";
+                    
+                    if (error.message.includes("401")) {
+                        errorMessage += "Authentication failed. Please try submitting again.";
+                    } else if (error.message.includes("403")) {
+                        errorMessage += "You don't have permission to access this spreadsheet. Please check your access rights.";
+                    } else if (error.message.includes("404")) {
+                        errorMessage += "Spreadsheet not found. Please verify the spreadsheet ID.";
+                    } else {
+                        errorMessage += error.message;
+                    }
+                    
+                    alert(errorMessage);
                 });
         }
     </script>
