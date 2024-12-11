@@ -17,6 +17,7 @@
             height: 100vh;
         }
         .container {
+            align-self: flex-start;
             width: 90%;
             max-width: 600px;
             background-color: #28293d;
@@ -59,27 +60,28 @@
         button:hover {
             background-color: #d48821;
         }
-        pre {
-            background-color: #33344b;
+        .editable-container {
+            margin: 20px 0;
+        }
+        .editable-field {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px;
+        }
+        .editable-label {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .editable-input, .editable-select {
             padding: 10px;
             border-radius: 8px;
-            color: #a8d0e6;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            cursor: pointer;
+            border: none;
+            background-color: #33344b;
+            color: #f5f5f5;
+            font-size: 14px;
         }
-        .confidence {
-            text-align: center;
-            font-size: 18px;
-            margin-top: 10px;
-        }
-        .editable {
-            background-color: #444a6f;
-            border: 1px solid #f5a623;
-            padding: 5px;
-            margin: 5px 0;
-            border-radius: 4px;
+        .editable-input:focus, .editable-select:focus {
+            outline: 2px solid #f5a623;
         }
     </style>
 </head>
@@ -88,8 +90,8 @@
         <h1>Expense Tracker</h1>
         <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
         <button onclick="authorize()">Submit</button>
-        <h2>Generated JSON:</h2>
-        <pre id="output" onclick="makeEditable(event)">Start typing to see the JSON...</pre>
+        <h2>Generated Data:</h2>
+        <div class="editable-container" id="editableContainer"></div>
         <div class="confidence" id="confidence">Confidence Score: 0%</div>
     </div>
 
@@ -151,40 +153,56 @@
                 "Confidence Score": `${score}%`
             };
 
-            document.getElementById("output").textContent = JSON.stringify(generatedData, null, 4);
+            displayEditableFields(generatedData);
             document.getElementById("confidence").textContent = `Confidence Score: ${score}%`;
         }
 
-        function makeEditable(event) {
-            const pre = event.target;
-            if (pre.isContentEditable) return;
+        function displayEditableFields(data) {
+            const container = document.getElementById("editableContainer");
+            container.innerHTML = "";
 
-            pre.contentEditable = true;
-            pre.classList.add("editable");
+            // Date of Transaction as Date Picker
+            const dateField = document.createElement("div");
+            dateField.className = "editable-field";
+            dateField.innerHTML = `
+                <label class="editable-label">Date of Transaction</label>
+                <input type="date" class="editable-input" value="${data["Date of Transaction"]}" onchange="updateField('Date of Transaction', this.value)">
+            `;
+            container.appendChild(dateField);
 
-            pre.addEventListener("blur", () => {
-                try {
-                    generatedData = JSON.parse(pre.textContent);
-                    pre.contentEditable = false;
-                    pre.classList.remove("editable");
-                    alert("Updated JSON will now reinforce learning.");
-                    reinforceLearning(generatedData);
-                } catch (e) {
-                    alert("Invalid JSON format! Reverting changes.");
-                    pre.textContent = JSON.stringify(generatedData, null, 4);
-                }
-            });
+            // Purchase Category as Dropdown
+            const categoryField = document.createElement("div");
+            categoryField.className = "editable-field";
+            const options = trainingData.map(entry => `<option value="${entry.category}" ${entry.category === data["What's the Purchase Category"] ? "selected" : ""}>${entry.category}</option>`).join("");
+            categoryField.innerHTML = `
+                <label class="editable-label">What's the Purchase Category</label>
+                <select class="editable-select" onchange="updateField('What\'s the Purchase Category', this.value)">
+                    ${options}
+                </select>
+            `;
+            container.appendChild(categoryField);
+
+            // Purchase Description as Text Area
+            const descriptionField = document.createElement("div");
+            descriptionField.className = "editable-field";
+            descriptionField.innerHTML = `
+                <label class="editable-label">Purchase Description</label>
+                <textarea class="editable-input" onchange="updateField('Purchase Description', this.value)">${data["Purchase Description"]}</textarea>
+            `;
+            container.appendChild(descriptionField);
+
+            // Confidence Score (Read-only)
+            const confidenceField = document.createElement("div");
+            confidenceField.className = "editable-field";
+            confidenceField.innerHTML = `
+                <label class="editable-label">Confidence Score</label>
+                <input type="text" class="editable-input" value="${data["Confidence Score"]}" readonly>
+            `;
+            container.appendChild(confidenceField);
         }
 
-        function reinforceLearning(updatedData) {
-            const category = updatedData["What's the Purchase Category"];
-            const description = updatedData["Purchase Description"].toLowerCase();
-
-            const trainingEntry = trainingData.find(entry => entry.category === category);
-            if (trainingEntry) {
-                const newKeywords = description.split(" ").filter(word => !trainingEntry.keywords.includes(word));
-                trainingEntry.keywords.push(...newKeywords);
-            }
+        function updateField(field, value) {
+            generatedData[field] = value;
         }
 
         function loadGapiClient() {
@@ -239,3 +257,6 @@
         }
     </script>
     <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+</body>
+</html>
