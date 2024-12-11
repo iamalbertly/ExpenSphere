@@ -95,7 +95,8 @@
     </div>
 
     <script>
-        const CLIENT_ID = "35324134118-gqbvjv3j7e80jcml7d6afku2nsco8vfe.apps.googleusercontent.com";
+        const CLIENT_ID = "35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com";
+        const REDIRECT_URI = "http://localhost";
 
         let trainingData = [
             { category: "Petrol & Transport", keywords: ["petrol", "raum", "bmw", "fuel"] },
@@ -110,18 +111,18 @@
             { category: "(OTHER)", keywords: ["miscellaneous", "unknown"] }
         ];
 
-        let gapiLoaded = false;
         let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let generatedData = {};
 
         document.getElementById("inputText").addEventListener("input", processInput);
         document.getElementById("inputText").addEventListener("keydown", (event) => {
             if (event.key === "Enter") {
-                event.preventDefault(); // Prevent default Enter behavior
-                authorize(); // Trigger submission
+                event.preventDefault();
+                authorize();
             }
         });
-
-        let generatedData = {};
 
         function processInput() {
             const input = document.getElementById("inputText").value.toLowerCase();
@@ -160,7 +161,7 @@
             const container = document.getElementById("editableContainer");
             container.innerHTML = "";
 
-            // Date of Transaction as Date Picker
+            // Date Picker
             const dateField = document.createElement("div");
             dateField.className = "editable-field";
             dateField.innerHTML = `
@@ -169,7 +170,7 @@
             `;
             container.appendChild(dateField);
 
-            // Purchase Category as Dropdown
+            // Category Dropdown
             const categoryField = document.createElement("div");
             categoryField.className = "editable-field";
             const options = trainingData.map(entry => `<option value="${entry.category}" ${entry.category === data["What's the Purchase Category"] ? "selected" : ""}>${entry.category}</option>`).join("");
@@ -181,7 +182,7 @@
             `;
             container.appendChild(categoryField);
 
-            // Purchase Description as Text Area
+            // Description Textarea
             const descriptionField = document.createElement("div");
             descriptionField.className = "editable-field";
             descriptionField.innerHTML = `
@@ -199,7 +200,6 @@
             `;
             container.appendChild(amountField);
 
-            // Display Confidence Score as non-editable text
             document.getElementById("confidence").textContent = `Confidence Score: ${data["Confidence Score"]}`;
         }
 
@@ -207,29 +207,21 @@
             generatedData[field] = value;
         }
 
-        function loadGapiClient() {
-            return new Promise((resolve) => {
-                gapi.load("client", () => {
-                    gapi.client.init({}).then(() => {
-                        resolve();
-                    });
-                });
+        function authorize() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: "https://www.googleapis.com/auth/spreadsheets",
+                callback: handleTokenResponse
             });
+            tokenClient.requestAccessToken();
         }
 
-        function authorize() {
-            if (!gapiLoaded) {
-                loadGapiClient().then(() => {
-                    tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: CLIENT_ID,
-                        scope: "https://www.googleapis.com/auth/spreadsheets",
-                        callback: submitData
-                    });
-                    tokenClient.requestAccessToken();
-                });
-                gapiLoaded = true;
+        function handleTokenResponse(response) {
+            if (response.error) {
+                console.error("OAuth Error", response);
+                alert("Authorization failed.");
             } else {
-                tokenClient.requestAccessToken();
+                submitData(response.access_token);
             }
         }
 
@@ -252,12 +244,12 @@
                 resource: { values }
             }).then(() => {
                 alert("Data submitted successfully!");
-                document.getElementById("inputText").value = ""; // Clear input field after submission
-            }).catch((error) => {
-                console.error("Error submitting data:", error.result.error.message);
+                document.getElementById("inputText").value = "";
+            }).catch(error => {
+                console.error("Error submitting data:", error);
+                alert("Failed to submit data.");
             });
         }
-        document.getElementById("inputText").focus();
     </script>
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
