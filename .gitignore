@@ -3,7 +3,5 @@ config.json
 .env
 credentials.json
 client_secret*.json
-# Ignore the full version with sensitive data
-index.html
 # Only commit the minified version
 !index-min.html 
