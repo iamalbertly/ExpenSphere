@@ -1,0 +1,45 @@
+Project: Expense Tracker
+Version: 0.0.4
+
+Initial Setup - [Current Date]
+- Created single-page web application for expense tracking
+- Implemented Google Sheets integration
+- Added OAuth authentication with token management
+- Created expense categorization system with confidence scoring
+- Implemented dark theme UI with responsive design
+- Added loading states and error handling
+- Included editable form fields for expense details
+
+Version 0.0.2 - [Current Date]
+- Added automatic version tracking system
+- Implemented semantic versioning (MAJOR.MINOR.PATCH)
+- Added version persistence using localStorage
+- Auto-increment patch version on successful submissions
+
+Version 0.0.3 - [Current Date]
+- Improved mobile responsiveness
+- Fixed keyboard visibility issues on mobile devices
+- Reorganized layout to keep input visible while typing
+- Enhanced mobile UI with fixed input section
+
+Version 0.0.4 - [Current Date]
+- Optimized form layout with grid system
+- Changed description field to single-line input
+- Improved field spacing and visual hierarchy
+- Enhanced mobile form layout
+- Added subtle color improvements for better readability
+
+Features:
+- Automatic expense categorization
+- Google Sheets data storage
+- Token-based authentication
+- Form validation
+- Error notifications
+- Loading indicators
+- Mobile-responsive design
+- Automatic version tracking
+
+Technical Stack:
+- HTML/CSS/JavaScript
+- Google Sheets API
+- Google OAuth 2.0 

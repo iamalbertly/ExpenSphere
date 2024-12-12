@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expense Tracker</title>
+    <title>Expense Tracker v0.0.4</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -11,13 +11,9 @@
             color: #f5f5f5;
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
         }
         .container {
-            align-self: flex-start;
+            margin: 20px auto;
             width: 90%;
             max-width: 600px;
             background-color: #28293d;
@@ -61,27 +57,42 @@
             background-color: #d48821;
         }
         .editable-container {
-            margin: 20px 0;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 15px 0;
         }
         .editable-field {
             display: flex;
             flex-direction: column;
-            margin-bottom: 15px;
+            margin-bottom: 0;
+        }
+        .editable-field.full-width {
+            grid-column: 1 / -1;
         }
         .editable-label {
             font-size: 14px;
             margin-bottom: 5px;
+            color: #8e8ea0;
         }
         .editable-input, .editable-select {
-            padding: 10px;
+            padding: 8px 12px;
             border-radius: 8px;
             border: none;
             background-color: #33344b;
             color: #f5f5f5;
             font-size: 14px;
+            height: 36px;
         }
-        .editable-input:focus, .editable-select:focus {
-            outline: 2px solid #f5a623;
+        .editable-input[type="text"] {
+            height: 36px;
+        }
+        .confidence-score {
+            grid-column: 1 / -1;
+            text-align: right;
+            color: #8e8ea0;
+            font-size: 14px;
+            margin-top: 10px;
         }
 
         /* Loading Overlay */
@@ -159,6 +170,42 @@
             from { transform: translateY(-100%); }
             to { transform: translateY(0); }
         }
+
+        .version {
+            font-size: 14px;
+            color: #f5a623;
+            margin-left: 10px;
+            opacity: 0.8;
+        }
+
+        /* Mobile optimization styles */
+        @media screen and (max-width: 768px) {
+            body {
+                background-color: #28293d;
+            }
+            .container {
+                margin: 0;
+                width: 100%;
+                max-width: 100%;
+                min-height: 100vh;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 15px;
+            }
+            .input-section {
+                padding: 15px;
+            }
+            .input-section textarea {
+                height: 60px;
+            }
+            .results-section {
+                margin-bottom: 140px;
+                padding: 0;
+            }
+            .editable-container {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -173,17 +220,30 @@
         <button class="error-close" onclick="closeError()">×</button>
     </div>
     <div class="container">
-        <h1>Expense Tracker</h1>
-        <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
-        <button onclick="authorize()">Submit</button>
-        <div class="editable-container" id="editableContainer"></div>
-        <div class="confidence" id="confidence">Confidence Score: 0%</div>
+        <h1>Expense Tracker <span class="version">v0.0.4</span></h1>
+        <div class="results-section">
+            <div class="editable-container" id="editableContainer"></div>
+            <div class="confidence" id="confidence">Confidence Score: 0%</div>
+        </div>
+        <div class="input-section">
+            <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
+            <button onclick="authorize()">Submit</button>
+        </div>
     </div>
 
     <script>
         const CLIENT_ID = "35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com";
         const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
         const SPREADSHEET_ID = "1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA";
+
+        const VERSION = {
+            major: 0,
+            minor: 0,
+            patch: 4,
+            toString() {
+                return `${this.major}.${this.minor}.${this.patch}`;
+            }
+        };
 
         const trainingData = [
             { category: "Petrol & Transport", keywords: ["petrol", "raum", "bmw", "fuel"] },
@@ -289,62 +349,59 @@
             const dateField = document.createElement("div");
             dateField.className = "editable-field";
             dateField.innerHTML = `
-                <label class="editable-label">Date of Transaction</label>
+                <label class="editable-label">Date</label>
                 <input type="date" class="editable-input" value="${data["Date of Transaction"]}" onchange="updateField('Date of Transaction', this.value)">
             `;
             container.appendChild(dateField);
+
+            // Amount Field
+            const amountField = document.createElement("div");
+            amountField.className = "editable-field";
+            amountField.innerHTML = `
+                <label class="editable-label">Amount (Tsh)</label>
+                <input type="number" class="editable-input" value="${data["How much money? (Tsh)"]}" onchange="updateField('How much money? (Tsh)', this.value)">
+            `;
+            container.appendChild(amountField);
 
             // Category Field
             const categoryField = document.createElement("div");
             categoryField.className = "editable-field";
             const options = trainingData.map(entry => `<option value="${entry.category}" ${entry.category === data["What's the Purchase Category"] ? "selected" : ""}>${entry.category}</option>`).join("");
             categoryField.innerHTML = `
-                <label class="editable-label">What's the Purchase Category</label>
+                <label class="editable-label">Category</label>
                 <select class="editable-select" onchange="updateField('What\'s the Purchase Category', this.value)">
                     ${options}
                 </select>
             `;
             container.appendChild(categoryField);
 
-            // Description Field
-            const descriptionField = document.createElement("div");
-            descriptionField.className = "editable-field";
-            descriptionField.innerHTML = `
-                <label class="editable-label">Purchase Description</label>
-                <textarea class="editable-input" onchange="updateField('Purchase Description', this.value)" rows="3">${data["Purchase Description"]}</textarea>
-            `;
-            container.appendChild(descriptionField);
-
-            // Amount Field
-            const amountField = document.createElement("div");
-            amountField.className = "editable-field";
-            amountField.innerHTML = `
-                <label class="editable-label">How much money? (Tsh)</label>
-                <input type="number" class="editable-input" value="${data["How much money? (Tsh)"]}" onchange="updateField('How much money? (Tsh)', this.value)">
-            `;
-            container.appendChild(amountField);
-
-            // Paid To Field as Select
+            // Paid To Field
             const paidToField = document.createElement("div");
             paidToField.className = "editable-field";
             const paidToOptionsHtml = paidToOptions
                 .map(option => `<option value="${option}" ${option === data["Where was the money payed to?"] ? "selected" : ""}>${option}</option>`)
                 .join("");
             paidToField.innerHTML = `
-                <label class="editable-label">Where was the money payed to?</label>
+                <label class="editable-label">Paid To</label>
                 <select class="editable-select" onchange="updateField('Where was the money payed to?', this.value)">
                     ${paidToOptionsHtml}
                 </select>
             `;
             container.appendChild(paidToField);
 
-            // Confidence Score (Read-only)
-            const confidenceField = document.createElement("div");
-            confidenceField.className = "editable-field";
-            confidenceField.innerHTML = `
-                <label class="editable-label">Confidance level</label>
-                <input type="text" class="editable-input" value="${data["Confidance level"]}" readonly>
+            // Description Field (now as text input)
+            const descriptionField = document.createElement("div");
+            descriptionField.className = "editable-field full-width";
+            descriptionField.innerHTML = `
+                <label class="editable-label">Description</label>
+                <input type="text" class="editable-input" value="${data["Purchase Description"]}" onchange="updateField('Purchase Description', this.value)">
             `;
+            container.appendChild(descriptionField);
+
+            // Confidence Score
+            const confidenceField = document.createElement("div");
+            confidenceField.className = "confidence-score";
+            confidenceField.innerHTML = `Confidence Score: ${data["Confidance level"]}`;
             container.appendChild(confidenceField);
         }
 
@@ -446,6 +503,55 @@
             document.querySelector('.error-notification').classList.remove('show');
         }
 
+        // Modify the updateVersion function to also update the document title
+        function updateVersion(type = 'patch') {
+            switch(type) {
+                case 'major':
+                    VERSION.major++;
+                    VERSION.minor = 0;
+                    VERSION.patch = 0;
+                    break;
+                case 'minor':
+                    VERSION.minor++;
+                    VERSION.patch = 0;
+                    break;
+                case 'patch':
+                    VERSION.patch++;
+                    break;
+            }
+            
+            // Update version display in UI and document title
+            const versionString = `v${VERSION.toString()}`;
+            document.title = `Expense Tracker ${versionString}`;
+            const versionElements = document.querySelectorAll('.version');
+            versionElements.forEach(el => {
+                el.textContent = versionString;
+            });
+
+            // Store version in localStorage
+            localStorage.setItem('expenseTrackerVersion', VERSION.toString());
+        }
+
+        // Update the DOMContentLoaded event listener to also set the initial title
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedVersion = localStorage.getItem('expenseTrackerVersion');
+            if (savedVersion) {
+                const [major, minor, patch] = savedVersion.split('.').map(Number);
+                VERSION.major = major;
+                VERSION.minor = minor;
+                VERSION.patch = patch;
+            }
+            
+            // Update both the version elements and document title
+            const versionString = `v${VERSION.toString()}`;
+            document.title = `Expense Tracker ${versionString}`;
+            const versionElements = document.querySelectorAll('.version');
+            versionElements.forEach(el => {
+                el.textContent = versionString;
+            });
+        });
+
+        // Modify the submitData function to increment patch version on successful submission
         async function submitData(token) {
             showLoading();
             const values = [
@@ -507,6 +613,9 @@
                 document.getElementById("inputText").value = "";
                 document.getElementById("editableContainer").innerHTML = "";
                 document.getElementById("confidence").textContent = "Confidence Score: 0%";
+                
+                // Increment patch version after successful submission
+                updateVersion('patch');
 
             } catch (error) {
                 hideLoading();
