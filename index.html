@@ -231,30 +231,31 @@
     </div>
 
     <script>
+        /** @const {string} */
         const CLIENT_ID = "__CLIENT_ID__";
+        /** @const {string} */
         const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
+        /** @const {string} */
         const SPREADSHEET_ID = "__SPREADSHEET_ID__";
+
+        /** @type {Object} */
+        let generatedData = null;
+        /** @type {Object} */
+        let tokenClient = null;
 
         const VERSION = {
             major: 0,
             minor: 0,
-            patch: 5,
-            toString: function() {
-                return `${this.major}.${this.minor}.${this.patch}`;
+            patch: 12,
+            buildDate: '2024-03-19',
+            toString() {
+                return `${this.major}.${this.minor}.${this.patch}-${this.buildDate}`;
             }
         };
 
         const trainingData = [
             { category: "Petrol & Transport", keywords: ["petrol", "raum", "bmw", "fuel"] },
-            { category: "Car Maintenance & Fee's", keywords: ["repair", "maintenance", "oil", "service"] },
-            { category: "Groceries", keywords: ["milk", "groceries", "maid", "shopping"] },
-            { category: "Gift to Family & Friends", keywords: ["gift", "donation", "contribution", "help", "irene"] },
-            { category: "Utilities", keywords: ["luku", "electricity", "water", "gas", "trash"] },
-            { category: "Eating Out", keywords: ["food", "restaurant", "chips", "lunch"] },
-            { category: "Medical & Medicine", keywords: ["hospital", "medicine", "doctor"] },
-            { category: "Aaliyah Investment", keywords: ["aaliyah", "school", "karate", "hair"] },
-            { category: "Celebration", keywords: ["anniversary", "party", "event"] },
-            { category: "(OTHER) Food, Transport, Groceries, etc.", keywords: ["miscellaneous", "unknown"] }
+            { category: "Car Maintenance & Fee's", keywords: ["repair", "maintenance", "oil", "service"] }
         ];
 
         const paidToOptions = [
@@ -285,60 +286,66 @@
             "(OTHER) Food, Transport, Groceries, etc."
         ];
 
-        let tokenClient;
-        let generatedData = {};
+        window.generatedData = null;
+        window.tokenClient = null;
 
-        document.getElementById("inputText").addEventListener("input", processInput);
-        document.getElementById("inputText").addEventListener("keydown", function(event) {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                authorize();
+        const EVENTS = {
+            INPUT: 'input',
+            KEYDOWN: 'keydown',
+            LOAD: 'load',
+            DOMCONTENTLOADED: 'DOMContentLoaded'
+        };
+
+        /* Safe initialization wrapper */
+        (function initApp() {
+            if (document.readyState === 'loading') {
+                document.addEventListener(EVENTS.DOMCONTENTLOADED, setupApp);
+            } else {
+                setupApp();
             }
-        });
+        })();
+
+        function setupApp() {
+            const savedVersion = localStorage.getItem('expenseTrackerVersion');
+            if (savedVersion) {
+                const [major, minor, patch] = savedVersion.split('.').map(Number);
+                VERSION.major = major;
+                VERSION.minor = minor;
+                VERSION.patch = patch;
+            }
+            
+            updateVersion();
+            setupEventListeners();
+        }
 
         function processInput() {
-            const input = document.getElementById("inputText").value.toLowerCase();
-            const amountMatch = input.match(/(\d{1,3}(?:,\d{3})*|[0-9]+)\s?k/i);
-            const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) * (amountMatch[0].includes('k') ? 1000 : 1) : null;
-
-            let category = "(OTHER) Food, Transport, Groceries, etc.";
-            let matchedKeywords = [];
-            let totalKeywords = 0;
-
-            for (let i = 0; i < trainingData.length; i++) {
-                const cat = trainingData[i].category;
-                const keywords = trainingData[i].keywords;
-                const matches = keywords.filter(keyword => input.includes(keyword));
-                if (matches.length > 0 && matches.length > matchedKeywords.length) {
-                    category = cat;
-                    matchedKeywords = matches;
-                    totalKeywords = keywords.length;
-                }
+            const inputText = document.getElementById("inputText").value.toLowerCase();
+            if (inputText.trim() === "") {
+                return;
             }
 
-            const score = matchedKeywords.length > 0 ? Math.round((matchedKeywords.length / totalKeywords) * 100) : 0;
+            let maxScore = 0;
+            let bestMatch = "Other";
 
-            /* Try to determine the best matching paidTo option based on the input and category */
-            let paidTo = "(OTHER) Food, Transport, Groceries, etc.";
-            for (const option of paidToOptions) {
-                const optionLower = option.toLowerCase();
-                if (input.includes(optionLower) || category.toLowerCase().includes(optionLower)) {
-                    paidTo = option;
-                    break;
+            trainingData.forEach(function(data) {
+                const score = calculateMatchScore(inputText, data.keywords);
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestMatch = data.category;
                 }
-            }
+            });
 
-            generatedData = {
+            window.generatedData = {
                 "Date of Transaction": new Date().toISOString().split("T")[0],
                 "Where did the money come from?": "ALBERT",
-                "How much money? (Tsh)": amount || "Unknown",
-                "What's the Purchase Category": category,
-                "Purchase Description": input,
-                "Where was the money payed to?": paidTo,
-                "Confidance level": score + "%"
+                "How much money? (Tsh)": "0",
+                "What's the Purchase Category": bestMatch,
+                "Purchase Description": inputText,
+                "Where was the money payed to?": "",
+                "Confidance level": Math.round(maxScore * 100) + "%"
             };
 
-            displayEditableFields(generatedData);
+            displayEditableFields(window.generatedData);
         }
 
         function displayEditableFields(data) {
@@ -405,8 +412,8 @@
             container.appendChild(confidenceField);
         }
 
-        function updateField(field, value) {
-            generatedData[field] = value;
+        window.updateField = function(field, value) {
+            window.generatedData[field] = value;
         }
 
         /* Function to check if stored token is still valid */
@@ -443,7 +450,7 @@
         }
 
         /* Modified authorize function */
-        async function authorize() {
+        window.authorize = async function() {
             const storedToken = getStoredToken();
             
             if (storedToken) {
@@ -458,15 +465,15 @@
             }
 
             /* If no valid token, request new one */
-            tokenClient = google.accounts.oauth2.initTokenClient({
+            window.tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: handleAuthResponse
             });
-            tokenClient.requestAccessToken();
+            window.tokenClient.requestAccessToken();
         }
 
-        function handleAuthResponse(response) {
+        async function handleAuthResponse(response) {
             if (response.error) {
                 console.error("OAuth Error:", response);
                 alert(`Authorization failed: ${response.error}. Please try again.`);
@@ -476,7 +483,7 @@
             
             /* Store the new token */
             storeToken(response.access_token);
-            submitData(response.access_token);
+            await submitData(response.access_token);
         }
 
         function showLoading() {
@@ -499,7 +506,7 @@
             notification.classList.add('show');
         }
 
-        function closeError() {
+        window.closeError = function() {
             document.querySelector('.error-notification').classList.remove('show');
         }
 
@@ -533,7 +540,7 @@
         }
 
         /* Update the DOMContentLoaded event listener to also set the initial title */
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function initApp() {
             const savedVersion = localStorage.getItem('expenseTrackerVersion');
             if (savedVersion) {
                 const [major, minor, patch] = savedVersion.split('.').map(Number);
@@ -542,7 +549,6 @@
                 VERSION.patch = patch;
             }
             
-            /* Update both the version elements and document title */
             const versionString = `v${VERSION.toString()}`;
             document.title = `Expense Tracker ${versionString}`;
             const versionElements = document.querySelectorAll('.version');
@@ -556,13 +562,13 @@
             showLoading();
             const values = [
                 [
-                    generatedData["Date of Transaction"],
-                    generatedData["Where did the money come from?"],
-                    generatedData["How much money? (Tsh)"],
-                    generatedData["What's the Purchase Category"],
-                    generatedData["Purchase Description"],
-                    generatedData["Where was the money payed to?"],
-                    generatedData["Confidance level"]
+                    window.generatedData["Date of Transaction"],
+                    window.generatedData["Where did the money come from?"],
+                    window.generatedData["How much money? (Tsh)"],
+                    window.generatedData["What's the Purchase Category"],
+                    window.generatedData["Purchase Description"],
+                    window.generatedData["Where was the money payed to?"],
+                    window.generatedData["Confidance level"]
                 ]
             ];
 
@@ -618,10 +624,10 @@
 
             } catch (error) {
                 hideLoading();
-                console.error("Detailed error:", error);
+                window.console && console.error("Detailed error:", error);
                 let errorTitle = "Submission Failed";
                 let errorMessage = "An error occurred while submitting your data.";
-                let errorDetails = error.message;
+                let errorDetails = error.message || '';
 
                 if (error.message.includes("401")) {
                     errorTitle = "Authentication Error";
@@ -638,6 +644,41 @@
                 showError(errorTitle, errorMessage, errorDetails);
             }
         }
+
+        /* Declare all functions that might be minified */
+        const FUNCTIONS = {
+            processInput,
+            authorize,
+            updateField,
+            closeError,
+            showError,
+            hideLoading,
+            showLoading,
+            updateVersion,
+            submitData,
+            handleAuthResponse,
+            displayEditableFields,
+            isTokenValid,
+            storeToken,
+            getStoredToken,
+            clearStoredToken
+        };
+
+        /* Make functions globally available */
+        Object.assign(window, FUNCTIONS);
+
+        ;(function(window, document, undefined) {
+            'use strict';
+
+            // Export necessary functions to global scope
+            Object.assign(window, {
+                authorize: authorize,
+                closeError: closeError,
+                updateField: updateField,
+                processInput: processInput
+            });
+
+        })(window, document);
     </script>
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>

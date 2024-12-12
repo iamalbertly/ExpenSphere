@@ -4,31 +4,96 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynamic HTML Renderer</title>
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        connect-src 'self' https://raw.githubusercontent.com https://sheets.googleapis.com;
+        script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com;
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: https:;
+        frame-src https://accounts.google.com;">
     <script>
-        async function loadAndRenderHTML() {
-            const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-            const baseURL = isLocal ? "" : "https://raw.githubusercontent.com/iamalbertly/ExpenSphere/main/";
-            const htmlURL = baseURL + "index-min.html";
-            const configURL = baseURL + "config.json";
+        /* Cache DOM selectors */
+        class DOMManager {
+            static init() {
+                this.body = document.body;
+                this.loader = document.getElementById('loader');
+                this.error = document.getElementById('error');
+            }
+        }
 
-            try {
-                // First load the minified HTML
-                const htmlResponse = await fetch(htmlURL);
-                if (!htmlResponse.ok) {
-                    throw new Error(`Failed to load HTML from ${htmlURL}: ${htmlResponse.status}`);
+        /* Configuration management */
+        class ConfigManager {
+            static get defaultConfig() {
+                /** @type {{ CLIENT_ID: string, SPREADSHEET_ID: string }} */
+                return {
+                    CLIENT_ID: "35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com",
+                    SPREADSHEET_ID: "1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA"
+                };
+            }
+
+            static get() {
+                try {
+                    const stored = localStorage.getItem('expenseTrackerConfig');
+                    return stored ? JSON.parse(stored) : this.defaultConfig;
+                } catch (e) {
+                    console.warn('Using default config due to error:', e);
+                    return this.defaultConfig;
                 }
-                let htmlContent = await htmlResponse.text();
+            }
+            
+            /**
+             * @param {string} clientId
+             * @param {string} spreadsheetId
+             * @returns {Object}
+             * @throws {Error}
+             */
+            static set(clientId, spreadsheetId) {
+                if (!clientId || !spreadsheetId) throw new Error('Invalid configuration');
+                const config = {
+                    CLIENT_ID: clientId,
+                    SPREADSHEET_ID: spreadsheetId
+                };
+                localStorage.setItem('expenseTrackerConfig', JSON.stringify(config));
+                return config;
+            }
+        }
 
-                // Then load the configuration
-                const configResponse = await fetch(configURL);
-                if (configResponse.ok) {
-                    const config = await configResponse.json();
-                    // Replace placeholders with actual values
-                    htmlContent = htmlContent
-                        .replace('__CLIENT_ID__', config.CLIENT_ID)
-                        .replace('__SPREADSHEET_ID__', config.SPREADSHEET_ID);
-                } else {
-                    throw new Error(`Failed to load config from ${configURL}: ${configResponse.status}`);
+        async function loadAndRenderHTML() {
+            const GITHUB_URL = "https://raw.githubusercontent.com/iamalbertly/ExpenSphere/main/index-min.html";
+            
+            async function fetchWithTimeout(url, timeout = 5000, signal) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                
+                try {
+                    const response = await fetch(url, { signal });
+                    clearTimeout(timeoutId);
+                    return response;
+                } catch (e) {
+                    clearTimeout(timeoutId);
+                    throw e;
+                }
+            }
+
+            let controller;
+            try {
+                controller = new AbortController();
+                const htmlResponse = await fetchWithTimeout(GITHUB_URL, 5000, controller.signal);
+                if (!htmlResponse.ok) {
+                    throw new Error(`Failed to load HTML: ${htmlResponse.status}`);
+                }
+                
+                let htmlContent = await htmlResponse.text();
+                const config = ConfigManager.get();
+
+                htmlContent = htmlContent
+                    .replace('__CLIENT_ID__', config.CLIENT_ID)
+                    .replace('__SPREADSHEET_ID__', config.SPREADSHEET_ID);
+
+                /* Sanitize content before rendering */
+                if (!htmlContent.includes('<!DOCTYPE html>') || 
+                    !htmlContent.includes('</html>')) {
+                    throw new Error('Invalid HTML content received');
                 }
 
                 document.open();
@@ -36,34 +101,68 @@
                 document.close();
             } catch (error) {
                 console.error("Error rendering HTML:", error);
-                document.body.innerHTML = `
-                    <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
-                        <h1 style="color: #ff4444;">Error Loading Content</h1>
-                        <p>Failed to load the application:</p>
-                        <p style="color: #666; margin: 10px 0; font-family: monospace;">${error.message}</p>
-                        <p>Please ensure all required files are present in the repository.</p>
-                        <button onclick="location.reload()" style="padding: 10px 20px; background: #f5a623; border: none; border-radius: 5px; color: white; cursor: pointer;">
-                            Refresh Page
-                        </button>
-                    </div>
-                `;
+                showError(error);
+            } finally {
+                controller?.abort();
             }
         }
 
-        window.onload = loadAndRenderHTML;
+        function showError(error) {
+            const errorHtml = `
+                <div class="error-container">
+                    <h1>Error Loading Content</h1>
+                    <p>Failed to load the application:</p>
+                    <pre>${error.message}</pre>
+                    <button onclick="location.reload()">Retry</button>
+                </div>
+            `;
+            DOMManager.body.innerHTML = errorHtml;
+        }
+
+        /* Initialize when DOM is ready */
+        document.addEventListener('DOMContentLoaded', () => {
+            DOMManager.init();
+            loadAndRenderHTML().catch(showError);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('unload', () => {
+            // Cleanup any pending requests
+            controller?.abort();
+        });
     </script>
+    <style>
+        .error-container {
+            text-align: center;
+            padding: 20px;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .error-container h1 { color: #ff4444; }
+        .error-container pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: left;
+        }
+        .error-container button {
+            padding: 10px 20px;
+            background: #f5a623;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
+    <div id="loader" class="error-container">
         <h1>Loading Content...</h1>
         <p>Please wait while we fetch the latest version.</p>
         <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #f5a623; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto;"></div>
     </div>
-    <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
 </body>
 </html>
