@@ -6,27 +6,41 @@
     <title>Dynamic HTML Renderer</title>
     <script>
         async function loadAndRenderHTML() {
-            const githubToken = "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";
-            const rawURL = "https://raw.githubusercontent.com/iamalbertly/ExpenSphere/refs/heads/main/index.html";
+            const localFallback = "index-min.html";  // Use minified version without sensitive data
+            const configURL = "config.json";  // Separate configuration file
 
             try {
-                const response = await fetch(rawURL, {
-                    headers: {
-                        Authorization: `token ${githubToken}`
-                    }
-                });
+                // First load the minified HTML
+                const htmlResponse = await fetch(localFallback);
+                if (!htmlResponse.ok) {
+                    throw new Error(`Failed to load HTML: ${htmlResponse.status}`);
+                }
+                let htmlContent = await htmlResponse.text();
 
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch: ${response.statusText}`);
+                // Then load the configuration
+                const configResponse = await fetch(configURL);
+                if (configResponse.ok) {
+                    const config = await configResponse.json();
+                    // Replace placeholders with actual values
+                    htmlContent = htmlContent
+                        .replace('__CLIENT_ID__', config.CLIENT_ID)
+                        .replace('__SPREADSHEET_ID__', config.SPREADSHEET_ID);
                 }
 
-                const htmlContent = await response.text();
                 document.open();
                 document.write(htmlContent);
                 document.close();
             } catch (error) {
                 console.error("Error rendering HTML:", error);
-                document.body.innerHTML = `<h1>Error</h1><p>Failed to load and render the HTML file. Check the console for details.</p>`;
+                document.body.innerHTML = `
+                    <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
+                        <h1 style="color: #ff4444;">Error Loading Content</h1>
+                        <p>Failed to load the application. Please try again later.</p>
+                        <button onclick="location.reload()" style="padding: 10px 20px; background: #f5a623; border: none; border-radius: 5px; color: white; cursor: pointer;">
+                            Refresh Page
+                        </button>
+                    </div>
+                `;
             }
         }
 
@@ -34,6 +48,16 @@
     </script>
 </head>
 <body>
-    <h1>Loading...</h1>
+    <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
+        <h1>Loading Content...</h1>
+        <p>Please wait while we fetch the latest version.</p>
+        <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #f5a623; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+    </div>
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </body>
 </html>

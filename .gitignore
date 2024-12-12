@@ -1,0 +1,6 @@
+# Ignore configuration files with sensitive data
+config.json
+# Ignore the full version with sensitive data
+index.html
+# Only commit the minified version
+!index-min.html 

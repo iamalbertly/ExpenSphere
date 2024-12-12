@@ -1,5 +1,5 @@
 Project: Expense Tracker
-Version: 0.0.8
+Version: 0.0.9
 
 Initial Setup - [Current Date]
 - Created single-page web application for expense tracking
@@ -50,6 +50,12 @@ Version 0.0.8 - [Current Date]
 - Removed duplicate confidence score display
 - Simplified UI by consolidating confidence display in grid layout
 
+Version 0.0.9 - [Current Date]
+- Added secure configuration loading system
+- Created minified version without sensitive data
+- Implemented configuration injection at runtime
+- Improved security by separating sensitive data
+
 Features:
 - Automatic expense categorization
 - Google Sheets data storage
@@ -59,6 +65,10 @@ Features:
 - Loading indicators
 - Mobile-responsive design
 - Automatic version tracking
+- Secure configuration loading
+- Minified version without sensitive data
+- Configuration injection at runtime
+- Improved security by separating sensitive data
 
 Technical Stack:
 - HTML/CSS/JavaScript
