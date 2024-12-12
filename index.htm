@@ -6,14 +6,16 @@
     <title>Dynamic HTML Renderer</title>
     <script>
         async function loadAndRenderHTML() {
-            const localFallback = "index-min.html";  // Use minified version without sensitive data
-            const configURL = "config.json";  // Separate configuration file
+            const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+            const baseURL = isLocal ? "" : "https://raw.githubusercontent.com/iamalbertly/ExpenSphere/main/";
+            const htmlURL = baseURL + "index-min.html";
+            const configURL = baseURL + "config.json";
 
             try {
                 // First load the minified HTML
-                const htmlResponse = await fetch(localFallback);
+                const htmlResponse = await fetch(htmlURL);
                 if (!htmlResponse.ok) {
-                    throw new Error(`Failed to load HTML: ${htmlResponse.status}`);
+                    throw new Error(`Failed to load HTML from ${htmlURL}: ${htmlResponse.status}`);
                 }
                 let htmlContent = await htmlResponse.text();
 
@@ -25,6 +27,8 @@
                     htmlContent = htmlContent
                         .replace('__CLIENT_ID__', config.CLIENT_ID)
                         .replace('__SPREADSHEET_ID__', config.SPREADSHEET_ID);
+                } else {
+                    throw new Error(`Failed to load config from ${configURL}: ${configResponse.status}`);
                 }
 
                 document.open();
@@ -35,7 +39,9 @@
                 document.body.innerHTML = `
                     <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
                         <h1 style="color: #ff4444;">Error Loading Content</h1>
-                        <p>Failed to load the application. Please try again later.</p>
+                        <p>Failed to load the application:</p>
+                        <p style="color: #666; margin: 10px 0; font-family: monospace;">${error.message}</p>
+                        <p>Please ensure all required files are present in the repository.</p>
                         <button onclick="location.reload()" style="padding: 10px 20px; background: #f5a623; border: none; border-radius: 5px; color: white; cursor: pointer;">
                             Refresh Page
                         </button>
