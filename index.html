@@ -230,6 +230,10 @@
         </div>
     </div>
 
+    <script type="module">
+        import config from './config.js';
+        console.log(config.clientId); // Use the client ID as needed
+    </script>
     <script>
         /** @const {string} */
         const CLIENT_ID = "__CLIENT_ID__";
@@ -350,7 +354,7 @@
 
         function displayEditableFields(data) {
             const container = document.getElementById("editableContainer");
-            container.innerHTML = "";
+            container.innerHTML = ``;
 
             /* Date Field */
             const dateField = document.createElement("div");
