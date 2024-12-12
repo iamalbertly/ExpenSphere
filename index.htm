@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic HTML Renderer</title>
+    <script>
+        async function loadAndRenderHTML() {
+            const githubToken = "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";
+            const rawURL = "https://raw.githubusercontent.com/iamalbertly/ExpenSphere/refs/heads/main/index.html";
+
+            try {
+                const response = await fetch(rawURL, {
+                    headers: {
+                        Authorization: `token ${githubToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch: ${response.statusText}`);
+                }
+
+                const htmlContent = await response.text();
+                document.open();
+                document.write(htmlContent);
+                document.close();
+            } catch (error) {
+                console.error("Error rendering HTML:", error);
+                document.body.innerHTML = `<h1>Error</h1><p>Failed to load and render the HTML file. Check the console for details.</p>`;
+            }
+        }
+
+        window.onload = loadAndRenderHTML;
+    </script>
+</head>
+<body>
+    <h1>Loading...</h1>
+</body>
+</html>
