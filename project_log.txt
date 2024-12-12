@@ -1,5 +1,5 @@
 Project: Expense Tracker
-Version: 0.0.7
+Version: 0.0.8
 
 Initial Setup - [Current Date]
 - Created single-page web application for expense tracking
@@ -45,6 +45,10 @@ Version 0.0.6 - [Current Date]
 Version 0.0.7 - [Current Date]
 - Fixed remaining single-line comments that could break minification
 - Ensured all comments use block comment syntax
+
+Version 0.0.8 - [Current Date]
+- Removed duplicate confidence score display
+- Simplified UI by consolidating confidence display in grid layout
 
 Features:
 - Automatic expense categorization

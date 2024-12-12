@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expense Tracker v0.0.4</title>
+    <title>Expense Tracker v0.0.8</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -186,8 +186,8 @@
             }
             .container {
                 margin: 0;
-                width: 100%;
-                max-width: 100%;
+                width: 90%;
+                max-width: 90%;
                 min-height: 100vh;
                 border-radius: 0;
                 box-shadow: none;
@@ -200,7 +200,6 @@
                 height: 60px;
             }
             .results-section {
-                margin-bottom: 140px;
                 padding: 0;
             }
             .editable-container {
@@ -221,10 +220,9 @@
         <button class="error-close" onclick="closeError()">×</button>
     </div>
     <div class="container">
-        <h1>Expense Tracker <span class="version">v0.0.4</span></h1>
+        <h1>Expense Tracker <span class="version">v0.0.7</span></h1>
         <div class="results-section">
             <div class="editable-container" id="editableContainer"></div>
-            <div class="confidence" id="confidence">Confidence Score: 0%</div>
         </div>
         <div class="input-section">
             <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
@@ -341,7 +339,6 @@
             };
 
             displayEditableFields(generatedData);
-            document.getElementById("confidence").textContent = "Confidence Score: " + score + "%";
         }
 
         function displayEditableFields(data) {
@@ -615,7 +612,6 @@
                 alert("Data submitted successfully!");
                 document.getElementById("inputText").value = "";
                 document.getElementById("editableContainer").innerHTML = "";
-                document.getElementById("confidence").textContent = "Confidence Score: 0%";
                 
                 /* Increment patch version after successful submission */
                 updateVersion('patch');
