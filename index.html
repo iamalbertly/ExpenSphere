@@ -496,6 +496,13 @@
                 setTimeout(processInput, 0);
             });
 
+            // Re-focus textarea when clicking anywhere in the container
+            document.querySelector('.container').addEventListener('click', function(event) {
+                if (event.target.id !== 'inputText' && !event.target.closest('button')) {
+                    inputTextArea.focus();
+                }
+            });
+
             // Close error notification when clicking outside
             document.addEventListener('click', function(event) {
                 const errorNotification = document.querySelector('.error-notification');
@@ -525,6 +532,12 @@
                 
                 updateVersionDisplay();
                 setupEventListeners();
+
+                // Add auto-focus to textarea
+                const inputTextArea = document.getElementById('inputText');
+                if (inputTextArea) {
+                    inputTextArea.focus();
+                }
             } catch (e) {
                 console.error('Error in setupApp:', e);
                 // Fallback to default version
