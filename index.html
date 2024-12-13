@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
     <title>Expense Tracker v0.0.15</title>
     <style>
         body {
@@ -492,35 +492,62 @@
             githubUser: 'serengetipremiersolutions',
             githubRepo: 'ExpenSphere',
             githubBranch: 'main',
+            configPaths: [
+                './config.json',
+                './8d2a9914847c91b8/config.js',
+                './config/config.json',
+                './config.js'
+            ],
             async init() {
                 try {
-                    // Try loading local config.json first
-                    try {
-                        const response = await fetch('./config.json');
-                        if (response.ok) {
-                            const config = await response.json();
-                            if (config.clientId) {
-                                this.clientId = config.clientId;
-                                return;
+                    // Try all local config paths first
+                    for (const path of this.configPaths) {
+                        try {
+                            const response = await fetch(path);
+                            if (response.ok) {
+                                let config;
+                                if (path.endsWith('.js')) {
+                                    const text = await response.text();
+                                    // Safely evaluate the config.js content
+                                    const configContent = text.replace('export default', '');
+                                    config = Function(`return ${configContent}`)();
+                                } else {
+                                    config = await response.json();
+                                }
+                                
+                                if (config?.clientId) {
+                                    this.clientId = config.clientId;
+                                    return;
+                                }
                             }
+                        } catch (e) {
+                            console.debug(`No config found at ${path}`);
                         }
-                    } catch (e) {
-                        console.debug('No local config.json found, trying GitHub');
                     }
 
-                    // Try loading from GitHub if local fails
-                    try {
-                        const githubUrl = `https://raw.githubusercontent.com/${this.githubUser}/${this.githubRepo}/${this.githubBranch}/config.json`;
-                        const response = await fetch(githubUrl);
-                        if (response.ok) {
-                            const config = await response.json();
-                            if (config.clientId) {
-                                this.clientId = config.clientId;
-                                return;
+                    // Try GitHub paths if local fails
+                    for (const path of this.configPaths) {
+                        try {
+                            const githubUrl = this.getGithubRawUrl(path.replace('./', ''));
+                            const response = await fetch(githubUrl);
+                            if (response.ok) {
+                                let config;
+                                if (path.endsWith('.js')) {
+                                    const text = await response.text();
+                                    const configContent = text.replace('export default', '');
+                                    config = Function(`return ${configContent}`)();
+                                } else {
+                                    config = await response.json();
+                                }
+                                
+                                if (config?.clientId) {
+                                    this.clientId = config.clientId;
+                                    return;
+                                }
                             }
+                        } catch (e) {
+                            console.debug(`No GitHub config found at ${path}`);
                         }
-                    } catch (e) {
-                        console.debug('No GitHub config.json found');
                     }
                     
                     // Check localStorage as last resort
