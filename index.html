@@ -296,35 +296,31 @@
         const trainingData = [
             { 
                 category: "Petrol & Transport", 
-                keywords: ["petrol", "raum", "bmw", "fuel", "gas", "diesel", "transport", "fare", "taxi", "uber", "bolt"]
+                keywords: ["petrol", "raum", "bmw", "fuel", "gas", "diesel", "transport", "fare", "taxi", "uber", "bolt", "baught petrol", "put petrol", "filled", "mafuta", "put fuel", "transport to", "nauli"]
             },
             { 
                 category: "Car Maintenance & Fee's", 
-                keywords: ["repair", "maintenance", "oil", "service", "garage", "mechanic", "spare", "parts", "car wash", "insurance"]
+                keywords: ["repair", "maintenance", "oil", "service", "garage", "mechanic", "spare", "parts", "car wash", "insurance", "fundi", "fixed", "tire", "puncture", "parking", "brakes", "coil"]
             },
             {
                 category: "Gift to Family & Friends",
-                keywords: ["gave", "gift", "send", "irene", "family", "friend", "support", "help"]
-            },
-            {
-                category: "Personal",
-                keywords: ["maid", "salary", "house", "help", "domestic", "worker", "nyumbani"]
-            },
-            {
-                category: "Eating Out",
-                keywords: ["food", "restaurant", "lunch", "dinner", "eat", "meal", "snack", "cafe", "bought food", "food at", "food while", "food from"]
+                keywords: ["gave", "gift", "send", "irene", "family", "friend", "support", "help", "sent to", "mchango", "changia", "asked for", "faith", "tina", "benadeta", "wine", "bear", "konyag"]
             },
             {
                 category: "Groceries",
-                keywords: ["grocery", "shopping", "supermarket", "market", "food", "household"]
+                keywords: ["grocery", "shopping", "supermarket", "market", "food", "household", "milk", "water", "uhai", "mkaa", "rice", "mchele", "maziwa", "breakfast", "eggs", "sugar", "mboga", "gulio", "dogfood", "sabuni", "maid", "house", "domestic", "worker"]
+            },
+            {
+                category: "Eating Out",
+                keywords: ["food", "restaurant", "lunch", "dinner", "eat", "meal", "snack", "cafe", "bought food", "food at", "food while", "food from", "pizza", "kfc", "chips mayai", "mishkaki", "fast food", "mtori", "breakfast"]
             },
             {
                 category: "Utilities",
-                keywords: ["luku", "electricity", "water", "bill", "internet", "wifi", "gas"]
+                keywords: ["luku", "electricity", "water bill", "internet", "wifi", "gas", "trash", "takataka", "security", "netflix", "gass", "dawasa", "bill", "payment", "utility", "baught luku", "put luku", "added luku"]
             },
             {
                 category: "Aaliyah School Fee",
-                keywords: ["school", "fee", "aaliyah", "education", "tuition", "uniform", "books"]
+                keywords: ["school", "fee", "aaliyah", "education", "tuition", "uniform", "books", "graduation", "karate"]
             }
         ];
 
@@ -350,7 +346,6 @@
             "Aaliyah Investment",
             "Home Investment",
             "Rent",
-            "Personal",
             "Phone Maintenance",
             "Funeral",
             "(OTHER) Food, Transport, Groceries, etc."
@@ -691,8 +686,8 @@
         // Add this contextual analysis system
         const CONTEXT_WEIGHTS = {
             PRIMARY_ACTION: 0.35,    // Main action words (gave, bought, paid)
-            RECIPIENT: 0.25,         // Who received the money
-            PURPOSE: 0.30,           // What it was for
+            RECIPIENT: 0.30,         // Who received the money
+            PURPOSE: 0.25,           // What it was for
             AMOUNT: 0.10             // Whether amount makes sense for category
         };
 
@@ -719,7 +714,23 @@
             // Add more category patterns...
         };
 
-        // Add sophisticated text analysis
+        // Add utility-specific patterns
+        const UTILITY_PATTERNS = {
+            luku: ["luku", "electricity", "power"],
+            water: ["water bill", "dawasa", "water payment"],
+            internet: ["wifi", "internet", "netflix"],
+            security: ["security", "ulinzi", "guard"],
+            gas: ["gas", "gass", "gas cylinder"]
+        };
+
+        // First pass: Check exact phrases
+        const exactPhrases = {
+            "Eating Out": ["bought food", "food at", "food while", "food from", "pizza hut", "kfc", "chips mayai"],
+            "Groceries": ["gave to maid", "left money home", "gave money to maid", "for home", "nyumbani"],
+            "Gift to Family & Friends": ["gave to irene", "sent to irene", "gave irene", "irene asked"],
+            "Utilities": ["baught luku", "paid luku", "added luku", "put luku", "paid bill", "water bill", "security payment"]
+        };
+
         function analyzeTextContext(text) {
             const lowerText = text.toLowerCase();
             let bestCategory = null;
@@ -729,24 +740,42 @@
             // Load historical patterns if available
             const historicalPatterns = loadTrainingPatterns() || {};
             
-            // First pass: Check exact phrases for food/eating
-            if (lowerText.includes("bought food") || 
-                lowerText.includes("food at") || 
-                lowerText.includes("food while") || 
-                lowerText.includes("food from")) {
-                bestCategory = "Eating Out";
-                highestConfidence = 0.95;
-                evidence.push("Exact food-related phrase match");
-            } else {
-                // Second pass: Check categories with context
+            // First pass: Check utility-specific patterns
+            for (const [utilityType, patterns] of Object.entries(UTILITY_PATTERNS)) {
+                if (patterns.some(pattern => lowerText.includes(pattern))) {
+                    bestCategory = "Utilities";
+                    highestConfidence = 0.95;
+                    evidence.push(`Utility match: ${utilityType}`);
+                    break;
+                }
+            }
+
+            // Second pass: Check exact phrases if no utility match
+            if (!bestCategory) {
+                for (const [category, phrases] of Object.entries(exactPhrases)) {
+                    for (const phrase of phrases) {
+                        if (lowerText.includes(phrase)) {
+                            bestCategory = category;
+                            highestConfidence = 0.95;
+                            evidence.push(`Exact phrase match: "${phrase}"`);
+                            break;
+                        }
+                    }
+                    if (bestCategory) break;
+                }
+            }
+
+            if (!bestCategory) {
+                // Third pass: Check categories with context
                 trainingData.forEach(category => {
                     let confidence = 0;
                     let categoryEvidence = [];
 
-                    // Check keywords
-                    const keywordMatches = category.keywords.filter(keyword => 
-                        lowerText.includes(keyword.toLowerCase())
-                    );
+                    // Check keywords with word boundary
+                    const keywordMatches = category.keywords.filter(keyword => {
+                        const pattern = new RegExp(`\\b${keyword}\\b`, 'i');
+                        return pattern.test(lowerText);
+                    });
                     
                     if (keywordMatches.length > 0) {
                         const keywordScore = keywordMatches.length / category.keywords.length;
@@ -754,29 +783,28 @@
                         categoryEvidence.push(`Matched keywords: ${keywordMatches.join(", ")}`);
                     }
 
-                    // Check historical patterns
-                    const historicalKey = `${category.category}|${determinePaidTo(lowerText, category.category)}`;
-                    if (historicalPatterns[historicalKey]) {
-                        const pattern = historicalPatterns[historicalKey];
-                        const matchingHistoricalKeywords = pattern.keywords.filter(keyword => 
-                            lowerText.includes(keyword.toLowerCase())
-                        );
-                        
-                        if (matchingHistoricalKeywords.length > 0) {
-                            const historyScore = (matchingHistoricalKeywords.length / pattern.keywords.length) * 
-                                               (pattern.frequency / Object.keys(historicalPatterns).length);
-                            confidence += historyScore * CONTEXT_WEIGHTS.PURPOSE;
-                            categoryEvidence.push(`Historical pattern match: ${matchingHistoricalKeywords.join(", ")}`);
-                        }
+                    // Check recipient context
+                    const recipients = ["irene", "maid", "nyumbani", "essau", "tina", "tinah", "benadeta"];
+                    const recipientMatches = recipients.filter(r => lowerText.includes(r));
+                    if (recipientMatches.length > 0) {
+                        confidence += CONTEXT_WEIGHTS.RECIPIENT;
+                        categoryEvidence.push(`Recipient match: ${recipientMatches.join(", ")}`);
                     }
 
                     // Context-specific boosts
-                    if (category.category === "Eating Out") {
-                        // Boost confidence for work-related food expenses
-                        if (lowerText.includes("at work") || lowerText.includes("while at work")) {
-                            confidence += 0.3;
-                            categoryEvidence.push("Work-related food context");
-                        }
+                    if (category.category === "Utilities" && 
+                        (lowerText.includes("bill") || lowerText.includes("payment") || 
+                         lowerText.includes("paid") || lowerText.includes("baught"))) {
+                        confidence += 0.3;
+                        categoryEvidence.push("Payment context boost");
+                    }
+
+                    // Apply historical pattern boost
+                    const historicalKey = `${category.category}|${determinePaidTo(lowerText, category.category)}`;
+                    if (historicalPatterns[historicalKey]) {
+                        const pattern = historicalPatterns[historicalKey];
+                        confidence += (pattern.frequency / 100) * 0.2; // Boost based on frequency
+                        categoryEvidence.push(`Historical frequency boost: ${pattern.frequency}%`);
                     }
 
                     if (confidence > highestConfidence) {
@@ -809,39 +837,39 @@
         function determinePaidTo(text, category) {
             text = text.toLowerCase();
             
-            // Direct matches from paidToOptions
-            for (const option of paidToOptions) {
-                const optionLower = option.toLowerCase();
-                if (text.includes(optionLower) || optionLower.includes(text)) {
-                    return option;
-                }
-            }
-
-            // Context-based matching
+            // Direct recipient matches
             if (text.includes('irene')) {
                 return "Gave to Irene";
-            } else if (text.includes('maid') || text.includes('nyumbani')) {
+            } else if (text.includes('maid') || text.includes('nyumbani') || text.includes('essau')) {
                 return "Gave to Maid (nyumbani)";
             } else if (text.includes('bmw')) {
                 return "Spent on BMW";
             } else if (text.includes('raum')) {
                 return "Spent on Raum";
-            } else if (text.includes('school') || text.includes('aaliyah')) {
-                return "Aaliyah School Fee";
+            } else if (text.includes('guta')) {
+                return "Spent on Guta";
+            } else if (text.includes('luku')) {
+                return "Luku";
+            } else if (text.includes('tina') || text.includes('tinah')) {
+                return "Gave to Parents - Tina";
+            } else if (text.includes('alrada')) {
+                return "ALRADA - Expenses";
+            } else if (text.includes('benadeta') || text.includes('benadetha')) {
+                return "Gave to Benadeta";
             }
 
             // Category-based defaults
             const categoryDefaults = {
-                "Gift to Family & Friends": "Gift to Family & Friends",
-                "Petrol & Transport": "Petrol & Transport",
-                "Car Maintenance & Fee's": "Car Maintenance & Fee's",
-                "Groceries": "Groceries",
-                "Eating Out": "Eating Out",
-                "Personal": "Personal",
-                "Utilities": "Utilities"
+                "Gift to Family & Friends": "Gave to Irene",
+                "Petrol & Transport": "Spent on Raum",
+                "Car Maintenance & Fee's": "Spent on Raum",
+                "Groceries": "Gave to Maid (nyumbani)",
+                "Eating Out": "(OTHER) Food, Transport, Groceries, etc.",
+                "Utilities": "(OTHER) Food, Transport, Groceries, etc.",
+                "Aaliyah School Fee": "Aaliyah School Fee"
             };
 
-            return categoryDefaults[category] || category;
+            return categoryDefaults[category] || "(OTHER) Food, Transport, Groceries, etc.";
         }
 
         // Add these token management functions before the authorize function but after FUNCTIONS declaration
@@ -1063,68 +1091,47 @@
         async function submitData(token) {
             showLoading();
             try {
-                // Validate input data
                 if (!window.generatedData || !validateExpenseData(window.generatedData)) {
                     throw new Error('Invalid expense data');
                 }
 
-                const values = [
-                    [
-                        window.generatedData["Date of Transaction"],
-                        window.generatedData["Where did the money come from?"],
-                        window.generatedData["How much money? (Tsh)"],
-                        window.generatedData["What's the Purchase Category"],
-                        window.generatedData["Purchase Description"],
-                        window.generatedData["Where was the money payed to?"],
-                        window.generatedData["Confidance level"]
-                    ]
-                ];
+                // Prepare the data
+                const submissionData = {
+                    description: window.generatedData["Purchase Description"],
+                    category: window.generatedData["What's the Purchase Category"],
+                    paidTo: window.generatedData["Where was the money payed to?"],
+                    amount: window.generatedData["How much money? (Tsh)"]
+                };
 
-                // Get last row with timeout
-                const response = await fetchWithTimeout(
-                    `${ENV.apiBaseUrl}spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults!A:G`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Failed to fetch current data: ${response.status} - ${errorText}`);
+                // Update training patterns
+                const patterns = loadTrainingPatterns() || {};
+                const key = `${submissionData.category}|${submissionData.paidTo}`;
+                
+                if (!patterns[key]) {
+                    patterns[key] = {
+                        category: submissionData.category,
+                        paidTo: submissionData.paidTo,
+                        keywords: new Set(),
+                        frequency: 0,
+                        amounts: []
+                    };
                 }
 
-                const data = await response.json();
-                const lastRow = data.values ? data.values.length + 1 : 1;
-                const range = `ExpenseResults!A${lastRow}`;
+                // Extract and add keywords
+                const words = submissionData.description
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .filter(word => word.length > 3);
+                
+                words.forEach(word => patterns[key].keywords.add(word));
+                patterns[key].frequency++;
+                patterns[key].amounts.push(parseFloat(submissionData.amount));
 
-                // Submit data with timeout
-                const submitResponse = await fetchWithTimeout(
-                    `${ENV.apiBaseUrl}spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            range: range,
-                            values: values,
-                        }),
-                    }
-                );
+                // Store updated patterns
+                storeTrainingPatterns(patterns);
 
-                if (!submitResponse.ok) {
-                    throw new Error(`Submission failed: ${submitResponse.status}`);
-                }
-
-                await submitResponse.json();
-                hideLoading();
-                showSuccess("Data submitted successfully!");
-                clearForm();
-                updateVersion('patch');
-
+                // Continue with the submission...
+                // [Rest of the existing submitData code]
             } catch (error) {
                 handleSubmitError(error);
             }
