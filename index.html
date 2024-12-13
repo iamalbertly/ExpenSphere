@@ -312,7 +312,7 @@
             },
             {
                 category: "Eating Out",
-                keywords: ["food", "restaurant", "lunch", "dinner", "eat", "meal", "snack", "cafe"]
+                keywords: ["food", "restaurant", "lunch", "dinner", "eat", "meal", "snack", "cafe", "bought food", "food at", "food while", "food from"]
             },
             {
                 category: "Groceries",
@@ -721,121 +721,80 @@
 
         // Add sophisticated text analysis
         function analyzeTextContext(text) {
-            const words = text.toLowerCase().split(/\s+/);
-            const amount = extractAmount(text);
+            const lowerText = text.toLowerCase();
+            let bestCategory = null;
+            let highestConfidence = 0;
+            let evidence = [];
             
-            let categoryScores = {};
-            let contextualEvidence = {};
+            // Load historical patterns if available
+            const historicalPatterns = loadTrainingPatterns() || {};
+            
+            // First pass: Check exact phrases for food/eating
+            if (lowerText.includes("bought food") || 
+                lowerText.includes("food at") || 
+                lowerText.includes("food while") || 
+                lowerText.includes("food from")) {
+                bestCategory = "Eating Out";
+                highestConfidence = 0.95;
+                evidence.push("Exact food-related phrase match");
+            } else {
+                // Second pass: Check categories with context
+                trainingData.forEach(category => {
+                    let confidence = 0;
+                    let categoryEvidence = [];
 
-            // Initialize scores for each category
-            Object.keys(CATEGORY_PATTERNS).forEach(category => {
-                categoryScores[category] = {
-                    score: 0,
-                    evidence: []
-                };
-            });
-
-            // Analyze each category
-            Object.entries(CATEGORY_PATTERNS).forEach(([category, patterns]) => {
-                let actionScore = 0;
-                let recipientScore = 0;
-                let contextScore = 0;
-                let amountScore = 0;
-
-                // Check actions
-                if (patterns.actions) {
-                    patterns.actions.forEach(action => {
-                        if (words.includes(action)) {
-                            actionScore += CONTEXT_WEIGHTS.PRIMARY_ACTION;
-                            categoryScores[category].evidence.push(`Action match: ${action}`);
-                        }
-                    });
-                }
-
-                // Check recipients
-                if (patterns.recipients) {
-                    patterns.recipients.forEach(recipient => {
-                        if (words.includes(recipient)) {
-                            recipientScore += CONTEXT_WEIGHTS.RECIPIENT;
-                            categoryScores[category].evidence.push(`Recipient match: ${recipient}`);
-                        }
-                    });
-                }
-
-                // Check contexts
-                if (patterns.contexts) {
-                    patterns.contexts.forEach(context => {
-                        if (text.includes(context)) {
-                            contextScore += CONTEXT_WEIGHTS.PURPOSE;
-                            categoryScores[category].evidence.push(`Context match: ${context}`);
-                        }
-                    });
-                }
-
-                // Check negative contexts
-                if (patterns.negativeContexts) {
-                    patterns.negativeContexts.forEach(context => {
-                        if (text.includes(context)) {
-                            contextScore -= CONTEXT_WEIGHTS.PURPOSE * 0.5;
-                            categoryScores[category].evidence.push(`Negative context: ${context}`);
-                        }
-                    });
-                }
-
-                // Boost contexts (stronger indicators)
-                if (patterns.boostContexts) {
-                    patterns.boostContexts.forEach(context => {
-                        if (text.includes(context)) {
-                            contextScore += CONTEXT_WEIGHTS.PURPOSE * 0.5;
-                            categoryScores[category].evidence.push(`Boosted context: ${context}`);
-                        }
-                    });
-                }
-
-                // Amount analysis
-                if (amount && patterns.typicalAmounts) {
-                    const closestAmount = findClosestAmount(amount, patterns.typicalAmounts);
-                    const amountDiff = Math.abs(amount - closestAmount) / closestAmount;
-                    if (amountDiff < 0.3) {
-                        amountScore = CONTEXT_WEIGHTS.AMOUNT * (1 - amountDiff);
-                        categoryScores[category].evidence.push(`Amount match: ${amount} (typical: ${closestAmount})`);
+                    // Check keywords
+                    const keywordMatches = category.keywords.filter(keyword => 
+                        lowerText.includes(keyword.toLowerCase())
+                    );
+                    
+                    if (keywordMatches.length > 0) {
+                        const keywordScore = keywordMatches.length / category.keywords.length;
+                        confidence += keywordScore * CONTEXT_WEIGHTS.PRIMARY_ACTION;
+                        categoryEvidence.push(`Matched keywords: ${keywordMatches.join(", ")}`);
                     }
-                }
 
-                // Calculate total score with weights
-                categoryScores[category].score = 
-                    actionScore + 
-                    recipientScore + 
-                    contextScore + 
-                    amountScore;
-            });
+                    // Check historical patterns
+                    const historicalKey = `${category.category}|${determinePaidTo(lowerText, category.category)}`;
+                    if (historicalPatterns[historicalKey]) {
+                        const pattern = historicalPatterns[historicalKey];
+                        const matchingHistoricalKeywords = pattern.keywords.filter(keyword => 
+                            lowerText.includes(keyword.toLowerCase())
+                        );
+                        
+                        if (matchingHistoricalKeywords.length > 0) {
+                            const historyScore = (matchingHistoricalKeywords.length / pattern.keywords.length) * 
+                                               (pattern.frequency / Object.keys(historicalPatterns).length);
+                            confidence += historyScore * CONTEXT_WEIGHTS.PURPOSE;
+                            categoryEvidence.push(`Historical pattern match: ${matchingHistoricalKeywords.join(", ")}`);
+                        }
+                    }
 
-            // Find the best matching category
-            let bestMatch = {
-                category: null,
-                score: 0,
-                evidence: []
-            };
+                    // Context-specific boosts
+                    if (category.category === "Eating Out") {
+                        // Boost confidence for work-related food expenses
+                        if (lowerText.includes("at work") || lowerText.includes("while at work")) {
+                            confidence += 0.3;
+                            categoryEvidence.push("Work-related food context");
+                        }
+                    }
 
-            Object.entries(categoryScores).forEach(([category, data]) => {
-                if (data.score > bestMatch.score) {
-                    bestMatch = {
-                        category: category,
-                        score: data.score,
-                        evidence: data.evidence
-                    };
-                }
-            });
+                    if (confidence > highestConfidence) {
+                        highestConfidence = confidence;
+                        bestCategory = category.category;
+                        evidence = categoryEvidence;
+                    }
+                });
+            }
 
-            // Calculate confidence percentage (max score possible is sum of all weights)
-            const maxPossibleScore = Object.values(CONTEXT_WEIGHTS).reduce((a, b) => a + b, 0);
-            const confidence = Math.min((bestMatch.score / maxPossibleScore) * 100, 95);
+            // Normalize confidence to percentage
+            const confidencePercentage = Math.min(Math.round(highestConfidence * 100), 100);
 
             return {
-                category: bestMatch.category || "(OTHER) Food, Transport, Groceries, etc.",
-                confidence: Math.round(confidence),
-                evidence: bestMatch.evidence,
-                amount: amount
+                category: bestCategory || "(OTHER) Food, Transport, Groceries, etc.",
+                confidence: confidencePercentage,
+                amount: extractAmount(text),
+                evidence: evidence
             };
         }
 
