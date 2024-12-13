@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
-    <title>Expense Tracker v0.0.8</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
+    <title>Expense Tracker v0.0.15</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -472,21 +472,93 @@
         </div>
     </div>
 
-    <script type="module">
-        import config from './config.js';
-        window.CLIENT_ID = config.clientId;
-    </script>
     <script>
-        // Environment configuration
+        // Environment and configuration management
         const ENV = {
             isDev: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
-            port: 3000, // Default development port
+            port: 3000,
             get apiBaseUrl() {
                 if (this.isDev) {
                     const port = window.location.port || this.port;
                     return `http://${window.location.hostname}:${port}/api/`;
                 }
                 return 'https://sheets.googleapis.com/v4/';
+            }
+        };
+
+        // Configuration management
+        const CONFIG = {
+            clientId: null,
+            githubUser: 'serengetipremiersolutions',
+            githubRepo: 'ExpenSphere',
+            githubBranch: 'main',
+            async init() {
+                try {
+                    // Try loading local config.json first
+                    try {
+                        const response = await fetch('./config.json');
+                        if (response.ok) {
+                            const config = await response.json();
+                            if (config.clientId) {
+                                this.clientId = config.clientId;
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.debug('No local config.json found, trying GitHub');
+                    }
+
+                    // Try loading from GitHub if local fails
+                    try {
+                        const githubUrl = `https://raw.githubusercontent.com/${this.githubUser}/${this.githubRepo}/${this.githubBranch}/config.json`;
+                        const response = await fetch(githubUrl);
+                        if (response.ok) {
+                            const config = await response.json();
+                            if (config.clientId) {
+                                this.clientId = config.clientId;
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.debug('No GitHub config.json found');
+                    }
+                    
+                    // Check localStorage as last resort
+                    const storedConfig = localStorage.getItem('expenseTrackerConfig');
+                    if (storedConfig) {
+                        const parsedConfig = JSON.parse(storedConfig);
+                        if (parsedConfig.clientId) {
+                            this.clientId = parsedConfig.clientId;
+                            return;
+                        }
+                    }
+
+                    // If no configuration is found, prompt user
+                    const userClientId = prompt(
+                        'Please enter your Google OAuth Client ID. You can get this from your Google Cloud Console.',
+                        ''
+                    );
+
+                    if (userClientId) {
+                        this.clientId = userClientId;
+                        // Store for future use
+                        localStorage.setItem('expenseTrackerConfig', JSON.stringify({ clientId: userClientId }));
+                    } else {
+                        throw new Error('Client ID is required to use this application.');
+                    }
+                } catch (error) {
+                    showError(
+                        'Configuration Error',
+                        'Failed to load application configuration.',
+                        error.message
+                    );
+                    throw error;
+                }
+            },
+
+            // Helper function to get GitHub raw URL for any file
+            getGithubRawUrl(filepath) {
+                return `https://raw.githubusercontent.com/${this.githubUser}/${this.githubRepo}/${this.githubBranch}/${filepath}`;
             }
         };
 
@@ -502,6 +574,67 @@
                 return `${this.major}.${this.minor}.${this.patch}`;
             }
         };
+
+        // Initialize the application
+        async function initializeApp() {
+            try {
+                await CONFIG.init();
+                setupEventListeners();
+                const inputTextArea = document.getElementById('inputText');
+                if (inputTextArea) {
+                    inputTextArea.focus();
+                }
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                showError(
+                    'Initialization Error',
+                    'Failed to initialize the application.',
+                    error.message
+                );
+            }
+        }
+
+        // Safe initialization wrapper
+        (function() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeApp);
+            } else {
+                initializeApp();
+            }
+        })();
+
+        // Update authorize function to use CONFIG.clientId
+        async function authorize() {
+            if (!CONFIG.clientId) {
+                showError(
+                    'Configuration Error',
+                    'Client ID is not configured.',
+                    'Please ensure the application is properly configured with a Google OAuth Client ID.'
+                );
+                return;
+            }
+
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.clientId,
+                scope: SCOPES,
+                callback: async (response) => {
+                    if (response.error) {
+                        showError('Authentication Error', 'Failed to authenticate with Google.', response.error);
+                        return;
+                    }
+                    
+                    try {
+                        TOKEN_MANAGEMENT.storeToken(response.access_token);
+                        // Process the current input after successful authentication
+                        processInput();
+                    } catch (error) {
+                        showError('Processing Error', 'Failed to process input after authentication.', error.message);
+                    }
+                }
+            });
+
+            tokenClient.requestAccessToken();
+        }
 
         // Event constants
         const EVENTS = {
@@ -609,30 +742,6 @@
             });
         }
 
-        // Initialize app
-        function setupApp() {
-            try {
-                setupEventListeners();
-                const inputTextArea = document.getElementById('inputText');
-                if (inputTextArea) {
-                    inputTextArea.focus();
-                }
-            } catch (e) {
-                console.error('Error in setupApp:', e);
-            }
-        }
-
-        // Safe initialization wrapper
-        (function initApp() {
-            if (document.readyState === 'loading') {
-                document.addEventListener(EVENTS.DOMCONTENTLOADED, setupApp);
-            } else {
-                setupApp();
-            }
-        })();
-
-        // Add the rest of your existing JavaScript code here...
-        
         // Training data and analysis functions
         const trainingData = [
             { 
