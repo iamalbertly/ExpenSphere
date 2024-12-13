@@ -476,6 +476,8 @@
         // Environment and configuration management
         const ENV = {
             isDev: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
+            isGitHub: window.location.hostname.includes('github.io'),
+            isProd: window.location.hostname === 'serengetipremiersolutions.com',
             port: 3000,
             get apiBaseUrl() {
                 if (this.isDev) {
@@ -492,15 +494,50 @@
             githubUser: 'serengetipremiersolutions',
             githubRepo: 'ExpenSphere',
             githubBranch: 'main',
-            configPaths: [
-                './config.json',
-                './8d2a9914847c91b8/config.js',
-                './config/config.json',
-                './config.js'
-            ],
+            
+            // Get config paths based on environment
+            get configPaths() {
+                if (ENV.isDev) {
+                    return ['./config.json', './config.js'];
+                }
+                if (ENV.isGitHub) {
+                    return ['./config.json'];
+                }
+                // Production paths
+                return ['./config.json'];
+            },
+
             async init() {
                 try {
-                    // Try all local config paths first
+                    // Try localStorage first for returning users
+                    const storedConfig = localStorage.getItem('expenseTrackerConfig');
+                    if (storedConfig) {
+                        const parsedConfig = JSON.parse(storedConfig);
+                        if (parsedConfig.clientId) {
+                            this.clientId = parsedConfig.clientId;
+                            return;
+                        }
+                    }
+
+                    // Try GitHub raw content if not in development
+                    if (!ENV.isDev) {
+                        try {
+                            const githubUrl = this.getGithubRawUrl('config.json');
+                            const response = await fetch(githubUrl);
+                            if (response.ok) {
+                                const config = await response.json();
+                                if (config?.clientId) {
+                                    this.clientId = config.clientId;
+                                    localStorage.setItem('expenseTrackerConfig', JSON.stringify({ clientId: config.clientId }));
+                                    return;
+                                }
+                            }
+                        } catch (e) {
+                            console.debug('No GitHub config found');
+                        }
+                    }
+
+                    // Try local paths as fallback
                     for (const path of this.configPaths) {
                         try {
                             const response = await fetch(path);
@@ -508,7 +545,6 @@
                                 let config;
                                 if (path.endsWith('.js')) {
                                     const text = await response.text();
-                                    // Safely evaluate the config.js content
                                     const configContent = text.replace('export default', '');
                                     config = Function(`return ${configContent}`)();
                                 } else {
@@ -517,46 +553,12 @@
                                 
                                 if (config?.clientId) {
                                     this.clientId = config.clientId;
+                                    localStorage.setItem('expenseTrackerConfig', JSON.stringify({ clientId: config.clientId }));
                                     return;
                                 }
                             }
                         } catch (e) {
                             console.debug(`No config found at ${path}`);
-                        }
-                    }
-
-                    // Try GitHub paths if local fails
-                    for (const path of this.configPaths) {
-                        try {
-                            const githubUrl = this.getGithubRawUrl(path.replace('./', ''));
-                            const response = await fetch(githubUrl);
-                            if (response.ok) {
-                                let config;
-                                if (path.endsWith('.js')) {
-                                    const text = await response.text();
-                                    const configContent = text.replace('export default', '');
-                                    config = Function(`return ${configContent}`)();
-                                } else {
-                                    config = await response.json();
-                                }
-                                
-                                if (config?.clientId) {
-                                    this.clientId = config.clientId;
-                                    return;
-                                }
-                            }
-                        } catch (e) {
-                            console.debug(`No GitHub config found at ${path}`);
-                        }
-                    }
-                    
-                    // Check localStorage as last resort
-                    const storedConfig = localStorage.getItem('expenseTrackerConfig');
-                    if (storedConfig) {
-                        const parsedConfig = JSON.parse(storedConfig);
-                        if (parsedConfig.clientId) {
-                            this.clientId = parsedConfig.clientId;
-                            return;
                         }
                     }
 
@@ -568,7 +570,6 @@
 
                     if (userClientId) {
                         this.clientId = userClientId;
-                        // Store for future use
                         localStorage.setItem('expenseTrackerConfig', JSON.stringify({ clientId: userClientId }));
                     } else {
                         throw new Error('Client ID is required to use this application.');
@@ -583,7 +584,6 @@
                 }
             },
 
-            // Helper function to get GitHub raw URL for any file
             getGithubRawUrl(filepath) {
                 return `https://raw.githubusercontent.com/${this.githubUser}/${this.githubRepo}/${this.githubBranch}/${filepath}`;
             }
