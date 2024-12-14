@@ -61,11 +61,23 @@
             grid-template-columns: repeat(2, 1fr);
             gap: 15px;
             margin: 15px 0;
+            position: relative;
         }
         .editable-field {
             display: flex;
             flex-direction: column;
             margin-bottom: 0;
+            position: relative;
+            cursor: pointer;
+        }
+        .editable-field:hover::after {
+            content: '✎';
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #f5a623;
+            font-size: 14px;
         }
         .editable-field.full-width {
             grid-column: 1 / -1;
@@ -229,6 +241,355 @@
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
         }
+
+
+        .submit-confirmation {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #28293d;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            z-index: 1002;
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .submit-confirmation.show {
+            display: block;
+        }
+
+        .submit-confirmation h3 {
+            color: #f5a623;
+            margin-top: 0;
+        }
+
+        .transaction-list {
+            margin: 15px 0;
+        }
+
+        .transaction-item {
+            padding: 10px;
+            background-color: #33344b;
+            border-radius: 5px;
+            margin-bottom: 8px;
+        }
+
+        .confirmation-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .confirmation-buttons button {
+            flex: 1;
+            margin: 0;
+        }
+
+        .confirmation-buttons button.cancel {
+            background-color: #666;
+        }
+
+        .transaction-navigation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .nav-button {
+            background: #33344b;
+            border: none;
+            color: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .nav-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .transaction-indicator {
+            color: #f5a623;
+            font-size: 14px;
+            margin: 0 10px;
+        }
+
+        .compact-view {
+            display: none;
+        }
+
+        @media screen and (max-width: 768px) {
+            .editable-container {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .editable-field {
+                margin-bottom: 8px;
+            }
+
+            .standard-view {
+                display: none;
+            }
+
+            .compact-view {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                background: #33344b;
+                padding: 10px;
+                border-radius: 8px;
+                margin-bottom: 10px;
+            }
+
+            .compact-field {
+                font-size: 14px;
+            }
+
+            .compact-label {
+                color: #8e8ea0;
+                font-size: 12px;
+                margin-bottom: 2px;
+            }
+
+            .compact-value {
+                font-weight: bold;
+            }
+
+            .compact-field.full {
+                grid-column: 1 / -1;
+            }
+
+            .container {
+                padding: 10px;
+            }
+
+            .input-section textarea {
+                height: 80px;
+            }
+
+            h1 {
+                font-size: 20px;
+                margin-bottom: 15px;
+            }
+
+        }
+
+        .edited-indicator {
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #4CAF50;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .edit-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #28293d;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            z-index: 1003;
+            width: 90%;
+            max-width: 400px;
+            display: none;
+        }
+
+        .edit-modal.show {
+            display: block;
+        }
+
+        .edit-modal h3 {
+            color: #f5a623;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .edit-modal-content {
+            margin-bottom: 20px;
+        }
+
+        .edit-modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .edit-modal-buttons button {
+            flex: 1;
+            margin: 0;
+        }
+
+        .edit-modal-buttons button.cancel {
+            background-color: #666;
+        }
+
+        .edit-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1002;
+            display: none;
+        }
+
+        .edit-overlay.show {
+            display: block;
+        }
+
+        .compact-field {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .compact-field:hover::after {
+            content: '✎';
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #f5a623;
+            font-size: 14px;
+        }
+
+        .compact-field.edited::before {
+            content: '✓';
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #4CAF50;
+            font-size: 12px;
+        }
+
+        .editable-value {
+            padding: 8px 12px;
+            border-radius: 8px;
+            background-color: #33344b;
+            color: #f5f5f5;
+            font-size: 14px;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .editable-field:hover .editable-value {
+            background-color: #3f4060;
+        }
+
+        .edit-modal .editable-input,
+        .edit-modal .editable-select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #33344b;
+            background-color: #28293d;
+            color: #f5f5f5;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .edit-modal .editable-input:focus,
+        .edit-modal .editable-select:focus {
+            outline: none;
+            border-color: #f5a623;
+        }
+
+        .edit-modal h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .edit-modal h3::before {
+            content: '✎';
+            color: #f5a623;
+            font-size: 20px;
+        }
+
+        .edited-indicator {
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #4CAF50;
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .edited .edited-indicator {
+            opacity: 1;
+        }
+
+        .compact-field {
+            position: relative;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .compact-field:hover {
+            background-color: #3f4060;
+        }
+
+        .compact-field.edited {
+            padding-left: 25px;
+        }
+
+        .compact-field.edited::before {
+            left: 5px;
+        }
+
+        @media screen and (max-width: 768px) {
+            .edit-modal {
+                width: 95%;
+                max-width: none;
+                margin: 10px;
+            }
+
+            .edit-modal .editable-input,
+            .edit-modal .editable-select {
+                font-size: 16px; /* Prevent zoom on iOS */
+                padding: 12px;
+            }
+
+            .edit-modal-buttons button {
+                padding: 12px;
+                font-size: 16px;
+            }
+        }
+
+        /* Add swipe hint for mobile */
+        @media (hover: none) {
+            .transaction-navigation::after {
+                content: 'Swipe to navigate';
+                position: absolute;
+                bottom: -20px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 12px;
+                color: #8e8ea0;
+                opacity: 0.7;
+            }
+        }
     </style>
 </head>
 <body>
@@ -243,13 +604,37 @@
         <button class="error-close" onclick="closeError()">×</button>
     </div>
     <div class="container">
-        <h1>Expense Tracker <span class="version">v0.0.15</span></h1>
+        <h1>Expense Tracker <span class="version">v0.0.17</span></h1>
         <div class="results-section">
+            <div class="transaction-navigation">
+                <button class="nav-button" id="prevTransaction" disabled onclick="navigateTransaction(-1)">← Previous</button>
+                <span class="transaction-indicator">1 of 1</span>
+                <button class="nav-button" id="nextTransaction" disabled onclick="navigateTransaction(1)">Next →</button>
+            </div>
             <div class="editable-container" id="editableContainer"></div>
         </div>
         <div class="input-section">
-            <textarea id="inputText" placeholder="Type your expense description and press Enter..."></textarea>
+            <textarea id="inputText" placeholder="Type your expense description and press Enter... (Use && or 'Also' for multiple transactions)"></textarea>
             <button onclick="authorize()">Submit</button>
+        </div>
+    </div>
+
+    <div class="edit-overlay"></div>
+    <div class="edit-modal">
+        <h3>Edit Field</h3>
+        <div class="edit-modal-content"></div>
+        <div class="edit-modal-buttons">
+            <button class="cancel" onclick="closeEditModal()">Cancel</button>
+            <button onclick="saveEdit()">Save</button>
+        </div>
+    </div>
+
+    <div class="submit-confirmation">
+        <h3>Confirm Transactions</h3>
+        <div class="transaction-list"></div>
+        <div class="confirmation-buttons">
+            <button class="cancel" onclick="closeConfirmation()">Cancel</button>
+            <button onclick="confirmSubmit()">Confirm</button>
         </div>
     </div>
 
@@ -268,11 +653,14 @@
         let generatedData = null;
         /** @type {Object} */
         let tokenClient = null;
+        let transactions = [];
+        let currentTransactionIndex = 0;
+        let currentEditField = null;
 
         const VERSION = {
             major: 0,
             minor: 0,
-            patch: 15,
+            patch: 16,
             buildDate: '2024-03-19',
             toString() {
                 return `${this.major}.${this.minor}.${this.patch}`;
@@ -366,103 +754,373 @@
             const inputText = document.getElementById("inputText").value;
             if (inputText.trim() === "") {
                 document.getElementById("editableContainer").innerHTML = "";
-                window.generatedData = null;
+                transactions = [];
+                updateTransactionCounter();
                 return;
             }
 
-            const analysis = analyzeTextContext(inputText);
-            
-            // Determine paid to based on category and context
-            let paidTo = determinePaidTo(inputText, analysis.category);
+            const transactionTexts = inputText
+                .split(/&&|(?:Also|also|ALSO)/)
+                .map(text => text.trim())
+                .filter(text => text.length > 0);
 
-            window.generatedData = {
+            transactions = transactionTexts.map(text => {
+                let analysis = analyzeTextContext(text);
+                analysis = applyHistoricalTraining(text, analysis);
+                const paidTo = determinePaidTo(text, analysis.category);
+
+                return {
                 "Date of Transaction": new Date().toISOString().split("T")[0],
                 "Where did the money come from?": "ALBERT",
                 "How much money? (Tsh)": analysis.amount.toString(),
                 "What's the Purchase Category": analysis.category,
-                "Purchase Description": inputText,
+                    "Purchase Description": text,
                 "Where was the money payed to?": paidTo,
-                "Confidance level": `${analysis.confidence}%`
+                    "Confidance level": `${analysis.confidence}%`,
+                    editedFields: new Set()
             };
+            });
 
-            displayEditableFields(window.generatedData);
+            currentTransactionIndex = 0;
+            updateTransactionCounter();
+            displayEditableFields(transactions[0]);
+        }
+
+        function updateTransactionCounter() {
             
-            // Log evidence for debugging
-            console.debug("Analysis Evidence:", analysis.evidence);
+            // Update navigation
+            const indicator = document.querySelector('.transaction-indicator');
+            const prevBtn = document.getElementById('prevTransaction');
+            const nextBtn = document.getElementById('nextTransaction');
+            
+            if (transactions.length > 0) {
+                indicator.textContent = `Transaction ${currentTransactionIndex + 1} of ${transactions.length}`;
+                prevBtn.disabled = currentTransactionIndex === 0;
+                nextBtn.disabled = currentTransactionIndex === transactions.length - 1;
+            } else {
+                indicator.textContent = 'No Transactions';
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+            }
+        }
+
+        function navigateTransaction(direction) {
+            const newIndex = currentTransactionIndex + direction;
+            if (newIndex >= 0 && newIndex < transactions.length) {
+                currentTransactionIndex = newIndex;
+                displayEditableFields(transactions[currentTransactionIndex]);
+                updateTransactionCounter();
+            }
+        }
+
+        function showConfirmation() {
+            const confirmation = document.querySelector('.submit-confirmation');
+            const transactionList = confirmation.querySelector('.transaction-list');
+            
+            transactionList.innerHTML = transactions.map((transaction, index) => `
+                <div class="transaction-item">
+                    <strong>Transaction ${index + 1}:</strong><br>
+                    Amount: ${transaction["How much money? (Tsh)"]} Tsh<br>
+                    Category: ${transaction["What's the Purchase Category"]}<br>
+                    Paid To: ${transaction["Where was the money payed to?"]}<br>
+                    Description: ${transaction["Purchase Description"]}
+                </div>
+            `).join('');
+
+            confirmation.classList.add('show');
+        }
+
+        function closeConfirmation() {
+            document.querySelector('.submit-confirmation').classList.remove('show');
+        }
+
+        async function authorize() {
+            if (transactions.length === 0) {
+                showError("No Transactions", "Please enter at least one transaction before submitting.");
+                return;
+            }
+
+            showConfirmation();
+        }
+
+        async function confirmSubmit() {
+            closeConfirmation();
+            const storedToken = APP_FUNCTIONS.getStoredToken();
+            
+            if (storedToken) {
+                const isValid = await APP_FUNCTIONS.isTokenValid(storedToken);
+                if (isValid) {
+                    submitData(storedToken);
+                    return;
+                }
+                APP_FUNCTIONS.clearStoredToken();
+            }
+
+            window.tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: window.CLIENT_ID,
+                scope: SCOPES,
+                callback: handleAuthResponse
+            });
+            
+            window.tokenClient.requestAccessToken();
+        }
+
+        /* Update submitData function to handle multiple transactions */
+        async function submitData(token) {
+            showLoading();
+            try {
+                if (!transactions || transactions.length === 0) {
+                    throw new Error('No transactions to submit');
+                }
+
+                // Submit each transaction
+                for (const transaction of transactions) {
+                    if (!validateExpenseData(transaction)) {
+                        throw new Error('Invalid expense data');
+                    }
+
+                    // Update training patterns for each transaction
+                    const patterns = loadTrainingPatterns() || {};
+                    const key = `${transaction["What's the Purchase Category"]}|${transaction["Where was the money payed to?"]}`;
+                    
+                    if (!patterns[key]) {
+                        patterns[key] = {
+                            category: transaction["What's the Purchase Category"],
+                            paidTo: transaction["Where was the money payed to?"],
+                            keywords: new Set(),
+                            frequency: 0,
+                            amounts: []
+                        };
+                    }
+
+                    const words = transaction["Purchase Description"]
+                        .toLowerCase()
+                        .split(/\s+/)
+                        .filter(word => word.length > 3);
+                    
+                    words.forEach(word => patterns[key].keywords.add(word));
+                    patterns[key].frequency++;
+                    patterns[key].amounts.push(parseFloat(transaction["How much money? (Tsh)"]));
+
+                    storeTrainingPatterns(patterns);
+                }
+
+                // Show success message
+                showSuccess(`Successfully submitted ${transactions.length} transaction${transactions.length > 1 ? 's' : ''}`);
+                
+                // Clear the form
+                clearForm();
+                
+            } catch (error) {
+                handleSubmitError(error);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function clearForm() {
+            document.getElementById("inputText").value = "";
+            document.getElementById("editableContainer").innerHTML = "";
+            transactions = [];
+            updateTransactionCounter();
+            window.generatedData = null;
+        }
+
+        // Add autofocus setup
+        function setupEventListeners() {
+            const inputTextArea = document.getElementById('inputText');
+            
+            // Set initial focus
+            inputTextArea.focus();
+            
+            // Process input when text changes (debounced)
+            let debounceTimeout;
+            inputTextArea.addEventListener('input', function() {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(processInput, 300);
+            });
+
+            // Process input when Enter is pressed
+            inputTextArea.addEventListener(EVENTS.KEYDOWN, function(event) {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    clearTimeout(debounceTimeout);
+                    processInput();
+                }
+            });
+
+            // Process input when text is pasted
+            inputTextArea.addEventListener('paste', function() {
+                setTimeout(processInput, 0);
+            });
+
+            // Re-focus textarea when clicking anywhere in the container
+            document.querySelector('.container').addEventListener('click', function(event) {
+                if (event.target.id !== 'inputText' && 
+                    !event.target.closest('button') && 
+                    !event.target.closest('.editable-container')) {
+                    inputTextArea.focus();
+                }
+            });
         }
 
         // Add this function for displaying editable fields
         function displayEditableFields(data) {
             const container = document.getElementById("editableContainer");
-            container.innerHTML = ``;
+            
+            // Standard view (desktop)
+            const standardView = document.createElement("div");
+            standardView.className = "standard-view";
 
             /* Date Field */
             const dateField = document.createElement("div");
             dateField.className = "editable-field";
+            dateField.setAttribute('data-field', 'Date of Transaction');
+            dateField.setAttribute('data-edit-type', 'date');
             dateField.innerHTML = `
                 <label class="editable-label">Date</label>
-                <input type="date" class="editable-input" value="${data["Date of Transaction"]}" onchange="updateField('Date of Transaction', this.value)">
+                <div class="editable-value">${data["Date of Transaction"]}</div>
             `;
-            container.appendChild(dateField);
+            standardView.appendChild(dateField);
 
             /* Amount Field */
             const amountField = document.createElement("div");
             amountField.className = "editable-field";
+            amountField.setAttribute('data-field', 'How much money? (Tsh)');
+            amountField.setAttribute('data-edit-type', 'number');
             amountField.innerHTML = `
                 <label class="editable-label">Amount (Tsh)</label>
-                <input type="number" class="editable-input" value="${data["How much money? (Tsh)"]}" onchange="updateField('How much money? (Tsh)', this.value)">
+                <div class="editable-value">${data["How much money? (Tsh)"]}</div>
             `;
-            container.appendChild(amountField);
+            standardView.appendChild(amountField);
 
             /* Category Field */
             const categoryField = document.createElement("div");
             categoryField.className = "editable-field";
-            const categoryOptions = paidToOptions
-                .filter(option => !option.toLowerCase().startsWith('spent') && !option.toLowerCase().startsWith('gave'))
-                .map(option => `<option value="${option}" ${option === data["What's the Purchase Category"] ? "selected" : ""}>${option}</option>`)
-                .join("");
+            categoryField.setAttribute('data-field', 'What\'s the Purchase Category');
+            categoryField.setAttribute('data-edit-type', 'category');
             categoryField.innerHTML = `
                 <label class="editable-label">Category</label>
-                <select class="editable-select" onchange="updateField('What\'s the Purchase Category', this.value)">
-                    ${categoryOptions}
-                </select>
+                <div class="editable-value">${data["What's the Purchase Category"]}</div>
             `;
-            container.appendChild(categoryField);
+            standardView.appendChild(categoryField);
 
             /* Paid To Field */
             const paidToField = document.createElement("div");
             paidToField.className = "editable-field";
-            const paidToOptionsHtml = paidToOptions
-                .map(option => `<option value="${option}" ${option === data["Where was the money payed to?"] ? "selected" : ""}>${option}</option>`)
-                .join("");
+            paidToField.setAttribute('data-field', 'Where was the money payed to?');
+            paidToField.setAttribute('data-edit-type', 'paidTo');
             paidToField.innerHTML = `
                 <label class="editable-label">Paid To</label>
-                <select class="editable-select" onchange="updateField('Where was the money payed to?', this.value)">
-                    ${paidToOptionsHtml}
-                </select>
+                <div class="editable-value">${data["Where was the money payed to?"]}</div>
             `;
-            container.appendChild(paidToField);
+            standardView.appendChild(paidToField);
 
             /* Description Field */
             const descriptionField = document.createElement("div");
             descriptionField.className = "editable-field full-width";
+            descriptionField.setAttribute('data-field', 'Purchase Description');
+            descriptionField.setAttribute('data-edit-type', 'text');
             descriptionField.innerHTML = `
                 <label class="editable-label">Description</label>
-                <input type="text" class="editable-input" value="${data["Purchase Description"]}" onchange="updateField('Purchase Description', this.value)">
+                <div class="editable-value">${data["Purchase Description"]}</div>
             `;
-            container.appendChild(descriptionField);
+            standardView.appendChild(descriptionField);
 
-            /* Confidence Score */
-            const confidenceField = document.createElement("div");
-            confidenceField.className = "confidence-score";
-            confidenceField.innerHTML = `Confidence Score: ${data["Confidance level"]}`;
-            container.appendChild(confidenceField);
+            // Compact view (mobile)
+            const compactView = document.createElement("div");
+            compactView.className = "compact-view";
+
+            /* Amount and Date (side by side) */
+            const amountCompact = document.createElement("div");
+            amountCompact.className = "compact-field";
+            amountCompact.setAttribute('data-field', 'How much money? (Tsh)');
+            amountCompact.setAttribute('data-edit-type', 'number');
+            amountCompact.innerHTML = `
+                <div class="compact-label">Amount</div>
+                <div class="compact-value">${data["How much money? (Tsh)"]} Tsh</div>
+            `;
+            compactView.appendChild(amountCompact);
+
+            const dateCompact = document.createElement("div");
+            dateCompact.className = "compact-field";
+            dateCompact.setAttribute('data-field', 'Date of Transaction');
+            dateCompact.setAttribute('data-edit-type', 'date');
+            dateCompact.innerHTML = `
+                <div class="compact-label">Date</div>
+                <div class="compact-value">${data["Date of Transaction"]}</div>
+            `;
+            compactView.appendChild(dateCompact);
+
+            /* Category and Paid To */
+            const categoryCompact = document.createElement("div");
+            categoryCompact.className = "compact-field";
+            categoryCompact.setAttribute('data-field', 'What\'s the Purchase Category');
+            categoryCompact.setAttribute('data-edit-type', 'category');
+            categoryCompact.innerHTML = `
+                <div class="compact-label">Category</div>
+                <div class="compact-value">${data["What's the Purchase Category"]}</div>
+            `;
+            compactView.appendChild(categoryCompact);
+
+            const paidToCompact = document.createElement("div");
+            paidToCompact.className = "compact-field";
+            paidToCompact.setAttribute('data-field', 'Where was the money payed to?');
+            paidToCompact.setAttribute('data-edit-type', 'paidTo');
+            paidToCompact.innerHTML = `
+                <div class="compact-label">Paid To</div>
+                <div class="compact-value">${data["Where was the money payed to?"]}</div>
+            `;
+            compactView.appendChild(paidToCompact);
+
+            /* Description (full width) */
+            const descriptionCompact = document.createElement("div");
+            descriptionCompact.className = "compact-field full";
+            descriptionCompact.setAttribute('data-field', 'Purchase Description');
+            descriptionCompact.setAttribute('data-edit-type', 'text');
+            descriptionCompact.innerHTML = `
+                <div class="compact-label">Description</div>
+                <div class="compact-value">${data["Purchase Description"]}</div>
+            `;
+            compactView.appendChild(descriptionCompact);
+
+            // Clear and append both views
+            container.innerHTML = '';
+            container.appendChild(standardView);
+            container.appendChild(compactView);
+
+            updateTransactionCounter();
+
+            // Add click handlers for editing
+            const fields = container.querySelectorAll('.editable-field, .compact-field');
+            fields.forEach(field => {
+                field.addEventListener('click', function(e) {
+                    // Prevent click event if clicking on input/select
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+                        return;
+                    }
+                    
+                    const fieldType = this.getAttribute('data-field');
+                    const currentValue = data[fieldType];
+                    const editType = this.getAttribute('data-edit-type');
+                    showEditModal(fieldType, currentValue, editType);
+                });
+
+                // Add edited indicator if field was edited
+                if (data.editedFields && data.editedFields.has(field.getAttribute('data-field'))) {
+                    field.classList.add('edited');
+                    const indicator = document.createElement('span');
+                    indicator.className = 'edited-indicator';
+                    indicator.textContent = '✓';
+                    field.appendChild(indicator);
+                }
+            });
         }
 
         // Add this function to update fields
         window.updateField = function(field, value) {
-            if (window.generatedData) {
-                window.generatedData[field] = value;
+            if (transactions[currentTransactionIndex]) {
+                transactions[currentTransactionIndex][field] = value;
             }
         }
 
@@ -1100,72 +1758,6 @@
             }
         };
 
-        /* Update submitData function with enhanced error handling and timeout */
-        async function submitData(token) {
-            showLoading();
-            try {
-                if (!window.generatedData || !validateExpenseData(window.generatedData)) {
-                    throw new Error('Invalid expense data');
-                }
-
-                // Prepare the data
-                const submissionData = {
-                    description: window.generatedData["Purchase Description"],
-                    category: window.generatedData["What's the Purchase Category"],
-                    paidTo: window.generatedData["Where was the money payed to?"],
-                    amount: window.generatedData["How much money? (Tsh)"]
-                };
-
-                // Update training patterns
-                const patterns = loadTrainingPatterns() || {};
-                const key = `${submissionData.category}|${submissionData.paidTo}`;
-                
-                if (!patterns[key]) {
-                    patterns[key] = {
-                        category: submissionData.category,
-                        paidTo: submissionData.paidTo,
-                        keywords: new Set(),
-                        frequency: 0,
-                        amounts: []
-                    };
-                }
-
-                // Extract and add keywords
-                const words = submissionData.description
-                    .toLowerCase()
-                    .split(/\s+/)
-                    .filter(word => word.length > 3);
-                
-                words.forEach(word => patterns[key].keywords.add(word));
-                patterns[key].frequency++;
-                patterns[key].amounts.push(parseFloat(submissionData.amount));
-
-                // Store updated patterns
-                storeTrainingPatterns(patterns);
-
-                // Continue with the submission...
-                // [Rest of the existing submitData code]
-            } catch (error) {
-                handleSubmitError(error);
-            }
-        }
-
-        /* Add data validation */
-        function validateExpenseData(data) {
-            const required = [
-                "Date of Transaction",
-                "Where did the money come from?",
-                "How much money? (Tsh)",
-                "What's the Purchase Category",
-                "Purchase Description"
-            ];
-            
-            return required.every(field => {
-                const value = data[field];
-                return value !== undefined && value !== null && value !== '';
-            });
-        }
-
         /* Add success notification */
         function showSuccess(message) {
             const notification = document.createElement('div');
@@ -1179,13 +1771,6 @@
             setTimeout(() => {
                 notification.remove();
             }, 3000);
-        }
-
-        /* Add form clearing */
-        function clearForm() {
-            document.getElementById("inputText").value = "";
-            document.getElementById("editableContainer").innerHTML = "";
-            window.generatedData = null;
         }
 
         /* Add enhanced error handling */
@@ -1206,6 +1791,168 @@
             }
 
             showError(errorTitle, errorMessage, errorDetails);
+        }
+
+        function showEditModal(field, value, type) {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            const content = modal.querySelector('.edit-modal-content');
+            
+            currentEditField = field;
+            
+            let inputHtml = '';
+            switch(type) {
+                case 'date':
+                    inputHtml = `<input type="date" class="editable-input" value="${value}">`;
+                    break;
+                case 'number':
+                    inputHtml = `<input type="number" class="editable-input" value="${value}" min="0" step="1000">`;
+                    break;
+                case 'category':
+                    const categoryOptions = paidToOptions
+                        .filter(option => !option.toLowerCase().startsWith('spent') && !option.toLowerCase().startsWith('gave'))
+                        .map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+                        .join("");
+                    inputHtml = `<select class="editable-select">${categoryOptions}</select>`;
+                    break;
+                case 'paidTo':
+                    const paidToOptionsHtml = paidToOptions
+                        .map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+                        .join("");
+                    inputHtml = `<select class="editable-select">${paidToOptionsHtml}</select>`;
+                    break;
+                default:
+                    inputHtml = `<input type="text" class="editable-input" value="${value}">`;
+            }
+            
+            content.innerHTML = inputHtml;
+            modal.classList.add('show');
+            overlay.classList.add('show');
+            
+            const input = content.querySelector('input, select');
+            input.focus();
+
+            // Add keyboard event listeners
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveEdit();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeEditModal();
+                }
+            });
+
+            // Close modal when clicking overlay
+            overlay.addEventListener('click', closeEditModal);
+        }
+
+        function closeEditModal() {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            modal.classList.remove('show');
+            overlay.classList.remove('show');
+            currentEditField = null;
+        }
+
+        function saveEdit() {
+            try {
+                const modal = document.querySelector('.edit-modal');
+                const input = modal.querySelector('input, select');
+                const newValue = input.value.trim();
+                
+                if (!newValue) {
+                    showError("Invalid Input", "Please enter a valid value.");
+                    return;
+                }
+                
+                if (transactions[currentTransactionIndex]) {
+                    const oldValue = transactions[currentTransactionIndex][currentEditField];
+                    
+                    // Validate input based on field type
+                    if (currentEditField === 'How much money? (Tsh)' && isNaN(newValue)) {
+                        showError("Invalid Amount", "Please enter a valid number.");
+                        return;
+                    }
+                    
+                    transactions[currentTransactionIndex][currentEditField] = newValue;
+                    
+                    // Mark transaction as edited
+                    if (!transactions[currentTransactionIndex].editedFields) {
+                        transactions[currentTransactionIndex].editedFields = new Set();
+                    }
+                    transactions[currentTransactionIndex].editedFields.add(currentEditField);
+                    
+                    // Store training data for future predictions
+                    storeEditTrainingData(currentEditField, oldValue, newValue, transactions[currentTransactionIndex]);
+                    
+                    // Refresh display
+                    displayEditableFields(transactions[currentTransactionIndex]);
+                    
+                    // Show success indicator
+                    showSuccess("Field updated successfully");
+                }
+                
+                closeEditModal();
+            } catch (error) {
+                console.error('Error saving edit:', error);
+                showError("Save Error", "Failed to save changes. Please try again.");
+            }
+        }
+
+        function storeEditTrainingData(field, oldValue, newValue, transaction) {
+            const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
+            
+            // Create a key based on the description text
+            const key = transaction["Purchase Description"].toLowerCase();
+            
+            if (!trainingData[key]) {
+                trainingData[key] = {
+                    corrections: {},
+                    frequency: 0
+                };
+            }
+            
+            if (!trainingData[key].corrections[field]) {
+                trainingData[key].corrections[field] = [];
+            }
+            
+            trainingData[key].corrections[field].push({
+                from: oldValue,
+                to: newValue,
+                timestamp: new Date().toISOString()
+            });
+            
+            trainingData[key].frequency++;
+            
+            localStorage.setItem('editTrainingData', JSON.stringify(trainingData));
+        }
+
+        function applyHistoricalTraining(text, analysis) {
+            const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
+            const key = text.toLowerCase();
+            
+            if (trainingData[key]) {
+                const corrections = trainingData[key].corrections;
+                const frequency = trainingData[key].frequency;
+                
+                // Apply corrections based on historical data
+                for (const [field, changes] of Object.entries(corrections)) {
+                    if (changes.length > 0) {
+                        // Use the most recent correction
+                        const mostRecent = changes[changes.length - 1];
+                        analysis[field] = mostRecent.to;
+                        
+                        // Adjust confidence based on correction frequency
+                        analysis.confidence = Math.max(
+                            analysis.confidence,
+                            Math.min(95, 70 + (frequency * 5))
+                        );
+                    }
+                }
+            }
+            
+            return analysis;
         }
 
         ;(function(window, document, undefined) {
