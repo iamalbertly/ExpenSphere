@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expense Tracker v0.0.8</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
+    <title>Expense Tracker v0.0.20</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -11,6 +12,9 @@
             color: #f5f5f5;
             margin: 0;
             padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         .container {
             margin: 20px auto;
@@ -20,6 +24,7 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            flex: 1;
         }
         h1 {
             text-align: center;
@@ -408,16 +413,7 @@
             max-width: 400px;
             display: none;
         }
-
-        .edit-modal.show {
-            display: block;
-        }
-
-        .edit-modal h3 {
-            color: #f5a623;
-            margin-top: 0;
-            margin-bottom: 15px;
-        }
+    
 
         .edit-modal-content {
             margin-bottom: 20px;
@@ -604,7 +600,7 @@
         <button class="error-close" onclick="closeError()">×</button>
     </div>
     <div class="container">
-        <h1>Expense Tracker <span class="version">v0.0.17</span></h1>
+        <h1>Expense Tracker <span class="version">v0.0.20</span></h1>
         <div class="results-section">
             <div class="transaction-navigation">
                 <button class="nav-button" id="prevTransaction" disabled onclick="navigateTransaction(-1)">← Previous</button>
@@ -640,48 +636,323 @@
 
     <script type="module">
         import config from './config.js';
-        // Set the client ID securely
         window.CLIENT_ID = config.clientId;
     </script>
     <script>
-        /** @const {string} */
+        /** Constants */
         const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
-        /** @const {string} */
         const SPREADSHEET_ID = "__SPREADSHEET_ID__";
+        const FETCH_TIMEOUT = 30000;
+        const EVENTS = {
+            INPUT: 'input',
+            KEYDOWN: 'keydown',
+            LOAD: 'load',
+            DOMCONTENTLOADED: 'DOMContentLoaded'
+        };
 
-        /** @type {Object} */
+        /** Global State */
         let generatedData = null;
-        /** @type {Object} */
         let tokenClient = null;
         let transactions = [];
         let currentTransactionIndex = 0;
         let currentEditField = null;
 
-        const VERSION = {
-            major: 0,
-            minor: 0,
-            patch: 16,
-            buildDate: '2024-03-19',
-            toString() {
-                return `${this.major}.${this.minor}.${this.patch}`;
-            },
-            fromString(versionStr) {
-                try {
-                    const [major, minor, patch] = versionStr.split('.').map(num => parseInt(num, 10));
-                    if (Number.isInteger(major) && Number.isInteger(minor) && Number.isInteger(patch)) {
-                        this.major = major;
-                        this.minor = minor;
-                        this.patch = patch;
-                        return true;
-                    }
-                } catch (e) {
-                    console.error('Error parsing version:', e);
-                }
-                return false;
+        /** Environment Configuration */
+        const ENV = {
+            isProd: window.location.hostname !== 'localhost',
+            get apiBaseUrl() {
+                return this.isProd ? 
+                    'https://sheets.googleapis.com/v4/' : 
+                    'http://localhost:3000/api/';
             }
         };
 
-        const trainingData = [
+        /** Version Management */
+        const VERSION = {
+            major: 0,
+            minor: 0,
+            patch: 20,
+            buildDate: '2024-03-19',
+            toString() {
+                return `${this.major}.${this.minor}.${this.patch}`;
+            }
+        };
+
+        /** Token Management */
+        const TOKEN_MANAGEMENT = {
+            async isTokenValid(token) {
+                if (!token) return false;
+                try {
+                    const response = await fetchWithTimeout(
+                        `${ENV.apiBaseUrl}spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults!A1`,
+                        {
+                            headers: { Authorization: `Bearer ${token}` },
+                        }
+                    );
+                    return response.ok;
+                } catch {
+                    return false;
+                }
+            },
+
+            storeToken(token) {
+                try {
+                    localStorage.setItem('expenseTrackerToken', token);
+                    localStorage.setItem('tokenTimestamp', Date.now().toString());
+                } catch (e) {
+                    console.error('Error storing token:', e);
+                }
+            },
+
+            getStoredToken() {
+                try {
+                    const token = localStorage.getItem('expenseTrackerToken');
+                    const timestamp = parseInt(localStorage.getItem('tokenTimestamp'), 10);
+                    if (token && timestamp && (Date.now() - timestamp < 3600000)) {
+                        return token;
+                    }
+                } catch (e) {
+                    console.error('Error getting token:', e);
+                }
+                return null;
+            },
+
+            clearStoredToken() {
+                try {
+                    localStorage.removeItem('expenseTrackerToken');
+                    localStorage.removeItem('tokenTimestamp');
+                } catch (e) {
+                    console.error('Error clearing token:', e);
+                }
+            }
+        };
+
+        /** Utility Functions */
+        async function fetchWithTimeout(url, options = {}) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timed out');
+                }
+                throw error;
+            }
+        }
+
+        /** UI Functions */
+        function showError(title, message, details = '') {
+            const notification = document.querySelector('.error-notification');
+            if (!notification) return;
+
+            notification.querySelector('.error-title').textContent = title;
+            notification.querySelector('.error-message').innerHTML = `
+                <p>${message}</p>
+                ${details ? `<p><strong>Details:</strong> ${details}</p>` : ''}
+            `;
+            notification.classList.add('show');
+        }
+
+        function closeError() {
+            document.querySelector('.error-notification')?.classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            const existingNotification = document.querySelector('.success-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'success-notification show';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        function showLoading() {
+            document.querySelector('.loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.querySelector('.loading-overlay').style.display = 'none';
+        }
+
+        /** Modal Functions */
+        function showEditModal(field, value, type) {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            const content = modal.querySelector('.edit-modal-content');
+            
+            currentEditField = field;
+            
+            let inputHtml = '';
+            switch(type) {
+                case 'date':
+                    inputHtml = `<input type="date" class="editable-input" value="${value}">`;
+                    break;
+                case 'number':
+                    inputHtml = `<input type="number" class="editable-input" value="${value}" min="0" step="1000">`;
+                    break;
+                case 'category':
+                    const categoryOptions = paidToOptions
+                        .filter(option => !option.toLowerCase().startsWith('spent') && !option.toLowerCase().startsWith('gave'))
+                        .map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+                        .join("");
+                    inputHtml = `<select class="editable-select">${categoryOptions}</select>`;
+                    break;
+                case 'paidTo':
+                    const paidToOptionsHtml = paidToOptions
+                        .map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+                        .join("");
+                    inputHtml = `<select class="editable-select">${paidToOptionsHtml}</select>`;
+                    break;
+                default:
+                    inputHtml = `<input type="text" class="editable-input" value="${value}">`;
+            }
+            
+            content.innerHTML = inputHtml;
+            modal.classList.add('show');
+            overlay.classList.add('show');
+            
+            const input = content.querySelector('input, select');
+            input.focus();
+
+            // Add keyboard event listeners
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveEdit();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeEditModal();
+                }
+            });
+        }
+
+        function closeEditModal() {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            modal.classList.remove('show');
+            overlay.classList.remove('show');
+            currentEditField = null;
+        }
+
+        function saveEdit() {
+            try {
+                const modal = document.querySelector('.edit-modal');
+                const input = modal.querySelector('input, select');
+                const newValue = input.value.trim();
+                
+                if (!newValue) {
+                    showError("Invalid Input", "Please enter a valid value.");
+                    return;
+                }
+                
+                if (transactions[currentTransactionIndex]) {
+                    const oldValue = transactions[currentTransactionIndex][currentEditField];
+                    
+                    // Validate input based on field type
+                    if (currentEditField === 'How much money? (Tsh)' && isNaN(newValue)) {
+                        showError("Invalid Amount", "Please enter a valid number.");
+                        return;
+                    }
+                    
+                    transactions[currentTransactionIndex][currentEditField] = newValue;
+                    
+                    // Mark transaction as edited
+                    if (!transactions[currentTransactionIndex].editedFields) {
+                        transactions[currentTransactionIndex].editedFields = new Set();
+                    }
+                    transactions[currentTransactionIndex].editedFields.add(currentEditField);
+                    
+                    // Store training data for future predictions
+                    storeEditTrainingData(currentEditField, oldValue, newValue, transactions[currentTransactionIndex]);
+                    
+                    // Refresh display
+                    displayEditableFields(transactions[currentTransactionIndex]);
+                    
+                    // Show success indicator
+                    showSuccess("Field updated successfully");
+                }
+                
+                closeEditModal();
+            } catch (error) {
+                console.error('Error saving edit:', error);
+                showError("Save Error", "Failed to save changes. Please try again.");
+            }
+        }
+
+        /** Initialize Application */
+        async function initializeApp() {
+            try {
+                setupEventListeners();
+                const inputTextArea = document.getElementById('inputText');
+                if (inputTextArea) {
+                    inputTextArea.focus();
+                }
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                showError(
+                    'Initialization Error',
+                    'Failed to initialize the application.',
+                    error.message
+                );
+            }
+        }
+
+        /** Event Listeners */
+        function setupEventListeners() {
+            const inputTextArea = document.getElementById('inputText');
+            if (!inputTextArea) return;
+
+            // Cleanup existing listeners
+            const newTextArea = inputTextArea.cloneNode(true);
+            inputTextArea.parentNode.replaceChild(newTextArea, inputTextArea);
+            
+            let debounceTimeout;
+            newTextArea.addEventListener('input', function() {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(processInput, 300);
+            });
+
+            newTextArea.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    clearTimeout(debounceTimeout);
+                    processInput();
+                }
+            });
+
+            newTextArea.addEventListener('paste', function() {
+                setTimeout(processInput, 0);
+            });
+
+            // Improved container click handling
+            document.querySelector('.container').addEventListener('click', function(event) {
+                const isInteractive = event.target.closest('input, select, button, .editable-field, .compact-field, .edit-modal, .submit-confirmation');
+                if (!isInteractive) {
+                    newTextArea.focus();
+                }
+            });
+
+            // Add error notification close handler
+            document.querySelector('.error-close')?.addEventListener('click', closeError);
+
+            // Add overlay click handlers
+            document.querySelector('.edit-overlay')?.addEventListener('click', closeEditModal);
+        }
+
+ // Training data and analysis functions
+ const trainingData = [
             { 
                 category: "Petrol & Transport", 
                 keywords: ["petrol", "raum", "bmw", "fuel", "gas", "diesel", "transport", "fare", "taxi", "uber", "bolt", "baught petrol", "put petrol", "filled", "mafuta", "put fuel", "transport to", "nauli"]
@@ -712,44 +983,336 @@
             }
         ];
 
-        const paidToOptions = [
-            "Spent on BMW",
-            "Spent on Raum",
-            "Gave to Maid (nyumbani)",
-            "Gave to Irene",
-            "Aaliyah School Fee",
-            "ALRADA - Expenses",
-            "Gave to Parents - Tina",
-            "Spent on Guta",
-            "Luku",
-            "Msiba",
-            "Medical Expenses",
-            "Eating Out",
-            "Groceries",
-            "Petrol & Transport",
-            "Car Maintenance & Fee's",
-            "Celebration",
-            "Gift to Family & Friends",
-            "Utilities",
-            "Aaliyah Investment",
-            "Home Investment",
-            "Rent",
-            "Phone Maintenance",
-            "Funeral",
-            "(OTHER) Food, Transport, Groceries, etc."
-        ];
-
-        window.generatedData = null;
-        window.tokenClient = null;
-
-        const EVENTS = {
-            INPUT: 'input',
-            KEYDOWN: 'keydown',
-            LOAD: 'load',
-            DOMCONTENTLOADED: 'DOMContentLoaded'
+        // Add utility-specific patterns
+        const UTILITY_PATTERNS = {
+            luku: ["luku", "electricity", "power"],
+            water: ["water bill", "dawasa", "water payment"],
+            internet: ["wifi", "internet", "netflix"],
+            security: ["security", "ulinzi", "guard"],
+            gas: ["gas", "gass", "gas cylinder"]
         };
 
-        // Add this function before setupEventListeners
+        // First pass: Check exact phrases
+        const exactPhrases = {
+            "Eating Out": ["bought food", "food at", "food while", "food from", "pizza hut", "kfc", "chips mayai"],
+            "Groceries": ["gave to maid", "left money home", "gave money to maid", "for home", "nyumbani"],
+            "Gift to Family & Friends": ["gave to irene", "sent to irene", "gave irene", "irene asked"],
+            "Utilities": ["baught luku", "paid luku", "added luku", "put luku", "paid bill", "water bill", "security payment"]
+        };
+
+        // Context weights
+        const CONTEXT_WEIGHTS = {
+            PRIMARY_ACTION: 0.35,
+            RECIPIENT: 0.30,
+            PURPOSE: 0.25,
+            AMOUNT: 0.10
+        };
+
+        // Update fetch handling
+        async function fetchWithTimeout(url, options = {}) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+            
+            try {
+                const response = await fetch(url, {
+                    ...fetchConfig,
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timed out');
+                }
+                console.error('Fetch error:', error);
+                throw error;
+            }
+        }
+
+        // Add the analyzeTextContext function
+        function analyzeTextContext(text) {
+            const lowerText = text.toLowerCase();
+            let bestCategory = null;
+            let highestConfidence = 0;
+            let evidence = [];
+            
+            // First pass: Check utility-specific patterns
+            for (const [utilityType, patterns] of Object.entries(UTILITY_PATTERNS)) {
+                if (patterns.some(pattern => lowerText.includes(pattern))) {
+                    bestCategory = "Utilities";
+                    highestConfidence = 0.95;
+                    evidence.push(`Utility match: ${utilityType}`);
+                    break;
+                }
+            }
+
+            // Second pass: Check exact phrases if no utility match
+            if (!bestCategory) {
+                for (const [category, phrases] of Object.entries(exactPhrases)) {
+                    for (const phrase of phrases) {
+                        if (lowerText.includes(phrase)) {
+                            bestCategory = category;
+                            highestConfidence = 0.95;
+                            evidence.push(`Exact phrase match: "${phrase}"`);
+                            break;
+                        }
+                    }
+                    if (bestCategory) break;
+                }
+            }
+
+            // Third pass: Check categories with context
+            if (!bestCategory) {
+                trainingData.forEach(category => {
+                    let confidence = 0;
+                    let categoryEvidence = [];
+
+                    // Check keywords with word boundary
+                    const keywordMatches = category.keywords.filter(keyword => {
+                        const pattern = new RegExp(`\\b${keyword}\\b`, 'i');
+                        return pattern.test(lowerText);
+                    });
+                    
+                    if (keywordMatches.length > 0) {
+                        const keywordScore = keywordMatches.length / category.keywords.length;
+                        confidence += keywordScore * CONTEXT_WEIGHTS.PRIMARY_ACTION;
+                        categoryEvidence.push(`Matched keywords: ${keywordMatches.join(", ")}`);
+                    }
+
+                    // Context-specific boosts
+                    if (category.category === "Utilities" && 
+                        (lowerText.includes("bill") || lowerText.includes("payment") || 
+                         lowerText.includes("paid") || lowerText.includes("baught"))) {
+                        confidence += 0.3;
+                        categoryEvidence.push("Payment context boost");
+                    }
+
+                    if (confidence > highestConfidence) {
+                        highestConfidence = confidence;
+                        bestCategory = category.category;
+                        evidence = categoryEvidence;
+                    }
+                });
+            }
+
+            // Normalize confidence to percentage
+            const confidencePercentage = Math.min(Math.round(highestConfidence * 100), 100);
+
+            return {
+                category: bestCategory || "(OTHER) Food, Transport, Groceries, etc.",
+                confidence: confidencePercentage,
+                amount: extractAmount(text),
+                evidence: evidence
+            };
+        }
+
+        // Add helper functions
+        function extractAmount(text) {
+            const patterns = [
+                /(\d+)k/i,
+                /(\d+)[,\s]?000/,
+                /(\d+)\s*thousand/i,
+                /(\d+)/
+            ];
+
+            for (let pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    let amount = parseInt(match[1]);
+                    if (pattern.toString().includes('k') || pattern.toString().includes('thousand')) {
+                        amount *= 1000;
+                    }
+                    return amount;
+                }
+            }
+            return 0;
+        }
+
+        // Add UI helper functions
+        function showLoading() {
+            document.querySelector('.loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.querySelector('.loading-overlay').style.display = 'none';
+        }
+
+        function showError(title, message, details) {
+            const notification = document.querySelector('.error-notification');
+            notification.querySelector('.error-title').textContent = title;
+            notification.querySelector('.error-message').innerHTML = `
+                <p>${message}</p>
+                ${details ? `<p><strong>Details:</strong> ${details}</p>` : ''}
+                ${message.includes('Authentication') ? '<p><strong>Solution:</strong> Please try submitting again to re-authenticate.</p>' : ''}
+                ${message.includes('permission') ? '<p><strong>Solution:</strong> Please ensure you have edit access to the spreadsheet.</p>' : ''}
+            `;
+            notification.classList.add('show');
+        }
+
+        function closeError() {
+            document.querySelector('.error-notification').classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            const notification = document.createElement('div');
+            notification.className = 'success-notification show';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // Add the missing processInput function
+        function processInput() {
+            const inputText = document.getElementById("inputText").value;
+            if (inputText.trim() === "") {
+                document.getElementById("editableContainer").innerHTML = "";
+                window.generatedData = null;
+                return;
+            }
+
+            const analysis = analyzeTextContext(inputText);
+            
+            // Determine paid to based on category and context
+            let paidTo = determinePaidTo(inputText, analysis.category);
+
+            window.generatedData = {
+                "Date of Transaction": new Date().toISOString().split("T")[0],
+                "Where did the money come from?": "ALBERT",
+                "How much money? (Tsh)": analysis.amount.toString(),
+                "What's the Purchase Category": analysis.category,
+                "Purchase Description": inputText,
+                "Where was the money payed to?": paidTo,
+                "Confidance level": `${analysis.confidence}%`
+            };
+
+            displayEditableFields(window.generatedData);
+            
+            // Log evidence for debugging
+            console.debug("Analysis Evidence:", analysis.evidence);
+        }
+
+        // Add the missing determinePaidTo function
+        function determinePaidTo(text, category) {
+            text = text.toLowerCase();
+            
+            // Direct recipient matches
+            if (text.includes('irene')) {
+                return "Gave to Irene";
+            } else if (text.includes('maid') || text.includes('nyumbani') || text.includes('essau')) {
+                return "Gave to Maid (nyumbani)";
+            } else if (text.includes('bmw')) {
+                return "Spent on BMW";
+            } else if (text.includes('raum')) {
+                return "Spent on Raum";
+            } else if (text.includes('guta')) {
+                return "Spent on Guta";
+            } else if (text.includes('luku')) {
+                return "Luku";
+            } else if (text.includes('tina') || text.includes('tinah')) {
+                return "Gave to Parents - Tina";
+            } else if (text.includes('alrada')) {
+                return "ALRADA - Expenses";
+            } else if (text.includes('benadeta') || text.includes('benadetha')) {
+                return "Gave to Benadeta";
+            }
+
+            // Category-based defaults
+            const categoryDefaults = {
+                "Gift to Family & Friends": "Gave to Irene",
+                "Petrol & Transport": "Spent on Raum",
+                "Car Maintenance & Fee's": "Spent on Raum",
+                "Groceries": "Gave to Maid (nyumbani)",
+                "Eating Out": "(OTHER) Food, Transport, Groceries, etc.",
+                "Utilities": "(OTHER) Food, Transport, Groceries, etc.",
+                "Aaliyah School Fee": "Aaliyah School Fee"
+            };
+
+            return categoryDefaults[category] || "(OTHER) Food, Transport, Groceries, etc.";
+        }
+
+        // Add the missing displayEditableFields function
+        function displayEditableFields(data) {
+            const container = document.getElementById("editableContainer");
+            container.innerHTML = ``;
+
+            /* Date Field */
+            const dateField = document.createElement("div");
+            dateField.className = "editable-field";
+            dateField.innerHTML = `
+                <label class="editable-label">Date</label>
+                <input type="date" class="editable-input" value="${data["Date of Transaction"]}" onchange="updateField('Date of Transaction', this.value)">
+            `;
+            container.appendChild(dateField);
+
+            /* Amount Field */
+            const amountField = document.createElement("div");
+            amountField.className = "editable-field";
+            amountField.innerHTML = `
+                <label class="editable-label">Amount (Tsh)</label>
+                <input type="number" class="editable-input" value="${data["How much money? (Tsh)"]}" onchange="updateField('How much money? (Tsh)', this.value)">
+            `;
+            container.appendChild(amountField);
+
+            /* Category Field */
+            const categoryField = document.createElement("div");
+            categoryField.className = "editable-field";
+            const categoryOptions = trainingData
+                .map(cat => `<option value="${cat.category}" ${cat.category === data["What's the Purchase Category"] ? "selected" : ""}>${cat.category}</option>`)
+                .join("");
+            categoryField.innerHTML = `
+                <label class="editable-label">Category</label>
+                <select class="editable-select" onchange="updateField('What\'s the Purchase Category', this.value)">
+                    ${categoryOptions}
+                    <option value="(OTHER) Food, Transport, Groceries, etc.">(OTHER) Food, Transport, Groceries, etc.</option>
+                </select>
+            `;
+            container.appendChild(categoryField);
+
+            /* Paid To Field */
+            const paidToField = document.createElement("div");
+            paidToField.className = "editable-field";
+            const paidToOptions = [
+                "Spent on BMW",
+                "Spent on Raum",
+                "Gave to Maid (nyumbani)",
+                "Gave to Irene",
+                "Aaliyah School Fee",
+                "ALRADA - Expenses",
+                "Gave to Parents - Tina",
+                "Spent on Guta",
+                "Luku",
+                "(OTHER) Food, Transport, Groceries, etc."
+            ].map(option => `<option value="${option}" ${option === data["Where was the money payed to?"] ? "selected" : ""}>${option}</option>`).join("");
+            paidToField.innerHTML = `
+                <label class="editable-label">Paid To</label>
+                <select class="editable-select" onchange="updateField('Where was the money payed to?', this.value)">
+                    ${paidToOptions}
+                </select>
+            `;
+            container.appendChild(paidToField);
+
+            /* Description Field */
+            const descriptionField = document.createElement("div");
+            descriptionField.className = "editable-field full-width";
+            descriptionField.innerHTML = `
+                <label class="editable-label">Description</label>
+                <input type="text" class="editable-input" value="${data["Purchase Description"]}" onchange="updateField('Purchase Description', this.value)">
+            `;
+            container.appendChild(descriptionField);
+
+            /* Confidence Score */
+            const confidenceField = document.createElement("div");
+            confidenceField.className = "confidence-score";
+            confidenceField.innerHTML = `Confidence Score: ${data["Confidance level"]}`;
+            container.appendChild(confidenceField);
+        }
+
+
+
+
+        /** Core Functions */
         function processInput() {
             const inputText = document.getElementById("inputText").value;
             if (inputText.trim() === "") {
@@ -766,19 +1329,19 @@
 
             transactions = transactionTexts.map(text => {
                 let analysis = analyzeTextContext(text);
-                analysis = applyHistoricalTraining(text, analysis);
+               // analysis = applyHistoricalTraining(text, analysis);
                 const paidTo = determinePaidTo(text, analysis.category);
 
                 return {
-                "Date of Transaction": new Date().toISOString().split("T")[0],
-                "Where did the money come from?": "ALBERT",
-                "How much money? (Tsh)": analysis.amount.toString(),
-                "What's the Purchase Category": analysis.category,
+                    "Date of Transaction": new Date().toISOString().split("T")[0],
+                    "Where did the money come from?": "ALBERT",
+                    "How much money? (Tsh)": analysis.amount.toString(),
+                    "What's the Purchase Category": analysis.category,
                     "Purchase Description": text,
-                "Where was the money payed to?": paidTo,
+                    "Where was the money payed to?": paidTo,
                     "Confidance level": `${analysis.confidence}%`,
                     editedFields: new Set()
-            };
+                };
             });
 
             currentTransactionIndex = 0;
@@ -787,14 +1350,12 @@
         }
 
         function updateTransactionCounter() {
-            
-            // Update navigation
             const indicator = document.querySelector('.transaction-indicator');
             const prevBtn = document.getElementById('prevTransaction');
             const nextBtn = document.getElementById('nextTransaction');
             
             if (transactions.length > 0) {
-                indicator.textContent = `Transaction ${currentTransactionIndex + 1} of ${transactions.length}`;
+                indicator.textContent = `${currentTransactionIndex + 1} of ${transactions.length}`;
                 prevBtn.disabled = currentTransactionIndex === 0;
                 nextBtn.disabled = currentTransactionIndex === transactions.length - 1;
             } else {
@@ -813,158 +1374,6 @@
             }
         }
 
-        function showConfirmation() {
-            const confirmation = document.querySelector('.submit-confirmation');
-            const transactionList = confirmation.querySelector('.transaction-list');
-            
-            transactionList.innerHTML = transactions.map((transaction, index) => `
-                <div class="transaction-item">
-                    <strong>Transaction ${index + 1}:</strong><br>
-                    Amount: ${transaction["How much money? (Tsh)"]} Tsh<br>
-                    Category: ${transaction["What's the Purchase Category"]}<br>
-                    Paid To: ${transaction["Where was the money payed to?"]}<br>
-                    Description: ${transaction["Purchase Description"]}
-                </div>
-            `).join('');
-
-            confirmation.classList.add('show');
-        }
-
-        function closeConfirmation() {
-            document.querySelector('.submit-confirmation').classList.remove('show');
-        }
-
-        async function authorize() {
-            if (transactions.length === 0) {
-                showError("No Transactions", "Please enter at least one transaction before submitting.");
-                return;
-            }
-
-            showConfirmation();
-        }
-
-        async function confirmSubmit() {
-            closeConfirmation();
-            const storedToken = APP_FUNCTIONS.getStoredToken();
-            
-            if (storedToken) {
-                const isValid = await APP_FUNCTIONS.isTokenValid(storedToken);
-                if (isValid) {
-                    submitData(storedToken);
-                    return;
-                }
-                APP_FUNCTIONS.clearStoredToken();
-            }
-
-            window.tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: window.CLIENT_ID,
-                scope: SCOPES,
-                callback: handleAuthResponse
-            });
-            
-            window.tokenClient.requestAccessToken();
-        }
-
-        /* Update submitData function to handle multiple transactions */
-        async function submitData(token) {
-            showLoading();
-            try {
-                if (!transactions || transactions.length === 0) {
-                    throw new Error('No transactions to submit');
-                }
-
-                // Submit each transaction
-                for (const transaction of transactions) {
-                    if (!validateExpenseData(transaction)) {
-                        throw new Error('Invalid expense data');
-                    }
-
-                    // Update training patterns for each transaction
-                    const patterns = loadTrainingPatterns() || {};
-                    const key = `${transaction["What's the Purchase Category"]}|${transaction["Where was the money payed to?"]}`;
-                    
-                    if (!patterns[key]) {
-                        patterns[key] = {
-                            category: transaction["What's the Purchase Category"],
-                            paidTo: transaction["Where was the money payed to?"],
-                            keywords: new Set(),
-                            frequency: 0,
-                            amounts: []
-                        };
-                    }
-
-                    const words = transaction["Purchase Description"]
-                        .toLowerCase()
-                        .split(/\s+/)
-                        .filter(word => word.length > 3);
-                    
-                    words.forEach(word => patterns[key].keywords.add(word));
-                    patterns[key].frequency++;
-                    patterns[key].amounts.push(parseFloat(transaction["How much money? (Tsh)"]));
-
-                    storeTrainingPatterns(patterns);
-                }
-
-                // Show success message
-                showSuccess(`Successfully submitted ${transactions.length} transaction${transactions.length > 1 ? 's' : ''}`);
-                
-                // Clear the form
-                clearForm();
-                
-            } catch (error) {
-                handleSubmitError(error);
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function clearForm() {
-            document.getElementById("inputText").value = "";
-            document.getElementById("editableContainer").innerHTML = "";
-            transactions = [];
-            updateTransactionCounter();
-            window.generatedData = null;
-        }
-
-        // Add autofocus setup
-        function setupEventListeners() {
-            const inputTextArea = document.getElementById('inputText');
-            
-            // Set initial focus
-            inputTextArea.focus();
-            
-            // Process input when text changes (debounced)
-            let debounceTimeout;
-            inputTextArea.addEventListener('input', function() {
-                clearTimeout(debounceTimeout);
-                debounceTimeout = setTimeout(processInput, 300);
-            });
-
-            // Process input when Enter is pressed
-            inputTextArea.addEventListener(EVENTS.KEYDOWN, function(event) {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    clearTimeout(debounceTimeout);
-                    processInput();
-                }
-            });
-
-            // Process input when text is pasted
-            inputTextArea.addEventListener('paste', function() {
-                setTimeout(processInput, 0);
-            });
-
-            // Re-focus textarea when clicking anywhere in the container
-            document.querySelector('.container').addEventListener('click', function(event) {
-                if (event.target.id !== 'inputText' && 
-                    !event.target.closest('button') && 
-                    !event.target.closest('.editable-container')) {
-                    inputTextArea.focus();
-                }
-            });
-        }
-
-        // Add this function for displaying editable fields
         function displayEditableFields(data) {
             const container = document.getElementById("editableContainer");
             
@@ -1089,16 +1498,11 @@
             container.appendChild(standardView);
             container.appendChild(compactView);
 
-            updateTransactionCounter();
-
             // Add click handlers for editing
             const fields = container.querySelectorAll('.editable-field, .compact-field');
             fields.forEach(field => {
                 field.addEventListener('click', function(e) {
-                    // Prevent click event if clicking on input/select
-                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
-                        return;
-                    }
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
                     
                     const fieldType = this.getAttribute('data-field');
                     const currentValue = data[fieldType];
@@ -1106,8 +1510,7 @@
                     showEditModal(fieldType, currentValue, editType);
                 });
 
-                // Add edited indicator if field was edited
-                if (data.editedFields && data.editedFields.has(field.getAttribute('data-field'))) {
+                if (data.editedFields?.has(field.getAttribute('data-field'))) {
                     field.classList.add('edited');
                     const indicator = document.createElement('span');
                     indicator.className = 'edited-indicator';
@@ -1117,531 +1520,60 @@
             });
         }
 
-        // Add this function to update fields
-        window.updateField = function(field, value) {
-            if (transactions[currentTransactionIndex]) {
-                transactions[currentTransactionIndex][field] = value;
-            }
-        }
-
-        // Move closeError function definition to the top with other function definitions
-        function closeError() {
-            document.querySelector('.error-notification').classList.remove('show');
-        }
-
-        /* Add this function after the EVENTS constant and before initApp */
-        function setupEventListeners() {
-            const inputTextArea = document.getElementById('inputText');
-            
-            // Process input when text changes (debounced)
-            let debounceTimeout;
-            inputTextArea.addEventListener('input', function() {
-                clearTimeout(debounceTimeout);
-                debounceTimeout = setTimeout(processInput, 300); // Wait 300ms after typing stops
-            });
-
-            // Process input when Enter is pressed
-            inputTextArea.addEventListener(EVENTS.KEYDOWN, function(event) {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    clearTimeout(debounceTimeout);
-                    processInput();
-                }
-            });
-
-            // Process input when text is pasted
-            inputTextArea.addEventListener('paste', function() {
-                setTimeout(processInput, 0);
-            });
-
-            // Re-focus textarea when clicking anywhere in the container
-            document.querySelector('.container').addEventListener('click', function(event) {
-                if (event.target.id !== 'inputText' && !event.target.closest('button')) {
-                    inputTextArea.focus();
-                }
-            });
-
-            // Close error notification when clicking outside
-            document.addEventListener('click', function(event) {
-                const errorNotification = document.querySelector('.error-notification');
-                if (errorNotification && 
-                    errorNotification.classList.contains('show') && 
-                    !errorNotification.contains(event.target)) {
-                    closeError();
-                }
-            });
-        }
-
-        /* Safe initialization wrapper */
-        (function initApp() {
-            if (document.readyState === 'loading') {
-                document.addEventListener(EVENTS.DOMCONTENTLOADED, setupApp);
-            } else {
-                setupApp();
-            }
-        })();
-
-        function setupApp() {
-            try {
-                const savedVersion = localStorage.getItem('expenseTrackerVersion');
-                if (savedVersion) {
-                    VERSION.fromString(savedVersion);
-                }
-                
-                updateVersionDisplay();
-                setupEventListeners();
-
-                // Add auto-focus to textarea
-                const inputTextArea = document.getElementById('inputText');
-                if (inputTextArea) {
-                    inputTextArea.focus();
-                }
-            } catch (e) {
-                console.error('Error in setupApp:', e);
-                // Fallback to default version
-                VERSION.major = 0;
-                VERSION.minor = 0;
-                VERSION.patch = 15;
-                updateVersionDisplay();
-            }
-        }
-
-        function calculateMatchScore(input, keywords) {
-            if (!input || !keywords || !Array.isArray(keywords)) {
-                return 0;
-            }
-            let score = 0;
-            keywords.forEach(keyword => {
-                if (input.includes(keyword.toLowerCase())) {
-                    score += 1;
-                }
-            });
-            return keywords.length > 0 ? score / keywords.length : 0;
-        }
-
-        // Add these helper functions before processInput
-        function extractAmount(text) {
-            // Match patterns like "50k", "50,000", "50000", "50 thousand"
-            const patterns = [
-                /(\d+)k/i,  // matches "50k"
-                /(\d+)[,\s]?000/,  // matches "50,000" or "50000"
-                /(\d+)\s*thousand/i,  // matches "50 thousand"
-                /(\d+)/  // matches any number
-            ];
-
-            for (let pattern of patterns) {
-                const match = text.match(pattern);
-                if (match) {
-                    let amount = parseInt(match[1]);
-                    if (pattern.toString().includes('k') || pattern.toString().includes('thousand')) {
-                        amount *= 1000;
-                    }
-                    return amount;
-                }
-            }
-            return 0;
-        }
-
-        function findBestMatch(text, options, threshold = 0.3) {
-            let bestMatch = null;
-            let bestScore = threshold;
-
-            options.forEach(option => {
-                const words = option.toLowerCase().split(/\s+/);
-                let score = 0;
-                
-                words.forEach(word => {
-                    if (text.includes(word)) {
-                        score += 1 / words.length;
-                    }
-                });
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMatch = option;
-                }
-            });
-
-            return bestMatch;
-        }
-
-        // Add these functions to handle training data
-        async function fetchTrainingData(token) {
-            try {
-                const response = await fetchWithTimeout(
-                    `${ENV.apiBaseUrl}spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults!A:G`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-
-                if (!response.ok) {
-                    throw new Error('Failed to fetch training data');
-                }
-
-                const data = await response.json();
-                if (!data.values || data.values.length < 2) {
-                    return [];
-                }
-
-                // Skip header row and process the rest
-                return data.values.slice(1).map(row => ({
-                    description: row[4]?.toLowerCase() || '',
-                    amount: row[2] || '',
-                    category: row[3] || '',
-                    paidTo: row[5] || ''
-                }));
-            } catch (error) {
-                console.error('Error fetching training data:', error);
-                return [];
-            }
-        }
-
-        function processTrainingData(data) {
-            const patterns = {};
-            
-            data.forEach(entry => {
-                if (!entry.description || !entry.category) return;
-                
-                const key = `${entry.category}|${entry.paidTo}`;
-                if (!patterns[key]) {
-                    patterns[key] = {
-                        category: entry.category,
-                        paidTo: entry.paidTo,
-                        keywords: new Set(),
-                        frequency: 0,
-                        amounts: []
-                    };
-                }
-
-                // Extract meaningful words from description
-                const words = entry.description
-                    .toLowerCase()
-                    .split(/\s+/)
-                    .filter(word => word.length > 3); // Ignore small words
-
-                words.forEach(word => patterns[key].keywords.add(word));
-                patterns[key].frequency++;
-                
-                // Store amount if it's a number
-                const amount = parseFloat(entry.amount.replace(/[^0-9.]/g, ''));
-                if (!isNaN(amount)) {
-                    patterns[key].amounts.push(amount);
-                }
-            });
-
-            // Convert Sets to Arrays and calculate average amounts
-            Object.values(patterns).forEach(pattern => {
-                pattern.keywords = Array.from(pattern.keywords);
-                pattern.avgAmount = pattern.amounts.length > 0 
-                    ? pattern.amounts.reduce((a, b) => a + b) / pattern.amounts.length 
-                    : 0;
-            });
-
-            return patterns;
-        }
-
-        // Store training data in localStorage
-        function storeTrainingPatterns(patterns) {
-            localStorage.setItem('expensePatterns', JSON.stringify(patterns));
-        }
-
-        // Load training data from localStorage
-        function loadTrainingPatterns() {
-            const stored = localStorage.getItem('expensePatterns');
-            return stored ? JSON.parse(stored) : null;
-        }
-
-        // Add this contextual analysis system
-        const CONTEXT_WEIGHTS = {
-            PRIMARY_ACTION: 0.35,    // Main action words (gave, bought, paid)
-            RECIPIENT: 0.30,         // Who received the money
-            PURPOSE: 0.25,           // What it was for
-            AMOUNT: 0.10             // Whether amount makes sense for category
-        };
-
-        const CATEGORY_PATTERNS = {
-            "Gift to Family & Friends": {
-                actions: ["gave", "sent", "transfer", "help"],
-                recipients: ["irene", "family", "friend", "parent", "tina"],
-                contexts: ["support", "help"],
-                typicalAmounts: [50000, 100000, 200000],
-                negativeContexts: ["food", "grocery", "shopping", "market"]
-            },
-            "Groceries": {
-                actions: ["bought", "purchased", "shopping", "buy"],
-                contexts: ["food", "grocery", "groceries", "market", "household", "home", "kitchen"],
-                typicalAmounts: [20000, 50000, 100000, 150000],
-                boostContexts: ["food", "grocery", "shopping"]
-            },
-            "Petrol & Transport": {
-                actions: ["fuel", "petrol", "filled"],
-                recipients: ["bmw", "raum"],
-                contexts: ["car", "vehicle", "transport"],
-                typicalAmounts: [30000, 50000, 70000]
-            }
-            // Add more category patterns...
-        };
-
-        // Add utility-specific patterns
-        const UTILITY_PATTERNS = {
-            luku: ["luku", "electricity", "power"],
-            water: ["water bill", "dawasa", "water payment"],
-            internet: ["wifi", "internet", "netflix"],
-            security: ["security", "ulinzi", "guard"],
-            gas: ["gas", "gass", "gas cylinder"]
-        };
-
-        // First pass: Check exact phrases
-        const exactPhrases = {
-            "Eating Out": ["bought food", "food at", "food while", "food from", "pizza hut", "kfc", "chips mayai"],
-            "Groceries": ["gave to maid", "left money home", "gave money to maid", "for home", "nyumbani"],
-            "Gift to Family & Friends": ["gave to irene", "sent to irene", "gave irene", "irene asked"],
-            "Utilities": ["baught luku", "paid luku", "added luku", "put luku", "paid bill", "water bill", "security payment"]
-        };
-
-        function analyzeTextContext(text) {
-            const lowerText = text.toLowerCase();
-            let bestCategory = null;
-            let highestConfidence = 0;
-            let evidence = [];
-            
-            // Load historical patterns if available
-            const historicalPatterns = loadTrainingPatterns() || {};
-            
-            // First pass: Check utility-specific patterns
-            for (const [utilityType, patterns] of Object.entries(UTILITY_PATTERNS)) {
-                if (patterns.some(pattern => lowerText.includes(pattern))) {
-                    bestCategory = "Utilities";
-                    highestConfidence = 0.95;
-                    evidence.push(`Utility match: ${utilityType}`);
-                    break;
-                }
-            }
-
-            // Second pass: Check exact phrases if no utility match
-            if (!bestCategory) {
-                for (const [category, phrases] of Object.entries(exactPhrases)) {
-                    for (const phrase of phrases) {
-                        if (lowerText.includes(phrase)) {
-                            bestCategory = category;
-                            highestConfidence = 0.95;
-                            evidence.push(`Exact phrase match: "${phrase}"`);
-                            break;
-                        }
-                    }
-                    if (bestCategory) break;
-                }
-            }
-
-            if (!bestCategory) {
-                // Third pass: Check categories with context
-                trainingData.forEach(category => {
-                    let confidence = 0;
-                    let categoryEvidence = [];
-
-                    // Check keywords with word boundary
-                    const keywordMatches = category.keywords.filter(keyword => {
-                        const pattern = new RegExp(`\\b${keyword}\\b`, 'i');
-                        return pattern.test(lowerText);
-                    });
-                    
-                    if (keywordMatches.length > 0) {
-                        const keywordScore = keywordMatches.length / category.keywords.length;
-                        confidence += keywordScore * CONTEXT_WEIGHTS.PRIMARY_ACTION;
-                        categoryEvidence.push(`Matched keywords: ${keywordMatches.join(", ")}`);
-                    }
-
-                    // Check recipient context
-                    const recipients = ["irene", "maid", "nyumbani", "essau", "tina", "tinah", "benadeta"];
-                    const recipientMatches = recipients.filter(r => lowerText.includes(r));
-                    if (recipientMatches.length > 0) {
-                        confidence += CONTEXT_WEIGHTS.RECIPIENT;
-                        categoryEvidence.push(`Recipient match: ${recipientMatches.join(", ")}`);
-                    }
-
-                    // Context-specific boosts
-                    if (category.category === "Utilities" && 
-                        (lowerText.includes("bill") || lowerText.includes("payment") || 
-                         lowerText.includes("paid") || lowerText.includes("baught"))) {
-                        confidence += 0.3;
-                        categoryEvidence.push("Payment context boost");
-                    }
-
-                    // Apply historical pattern boost
-                    const historicalKey = `${category.category}|${determinePaidTo(lowerText, category.category)}`;
-                    if (historicalPatterns[historicalKey]) {
-                        const pattern = historicalPatterns[historicalKey];
-                        confidence += (pattern.frequency / 100) * 0.2; // Boost based on frequency
-                        categoryEvidence.push(`Historical frequency boost: ${pattern.frequency}%`);
-                    }
-
-                    if (confidence > highestConfidence) {
-                        highestConfidence = confidence;
-                        bestCategory = category.category;
-                        evidence = categoryEvidence;
-                    }
-                });
-            }
-
-            // Normalize confidence to percentage
-            const confidencePercentage = Math.min(Math.round(highestConfidence * 100), 100);
-
-            return {
-                category: bestCategory || "(OTHER) Food, Transport, Groceries, etc.",
-                confidence: confidencePercentage,
-                amount: extractAmount(text),
-                evidence: evidence
-            };
-        }
-
-        // Helper function to find closest typical amount
-        function findClosestAmount(amount, typicalAmounts) {
-            return typicalAmounts.reduce((prev, curr) => {
-                return Math.abs(curr - amount) < Math.abs(prev - amount) ? curr : prev;
-            });
-        }
-
-        // Add this function before processInput
-        function determinePaidTo(text, category) {
-            text = text.toLowerCase();
-            
-            // Direct recipient matches
-            if (text.includes('irene')) {
-                return "Gave to Irene";
-            } else if (text.includes('maid') || text.includes('nyumbani') || text.includes('essau')) {
-                return "Gave to Maid (nyumbani)";
-            } else if (text.includes('bmw')) {
-                return "Spent on BMW";
-            } else if (text.includes('raum')) {
-                return "Spent on Raum";
-            } else if (text.includes('guta')) {
-                return "Spent on Guta";
-            } else if (text.includes('luku')) {
-                return "Luku";
-            } else if (text.includes('tina') || text.includes('tinah')) {
-                return "Gave to Parents - Tina";
-            } else if (text.includes('alrada')) {
-                return "ALRADA - Expenses";
-            } else if (text.includes('benadeta') || text.includes('benadetha')) {
-                return "Gave to Benadeta";
-            }
-
-            // Category-based defaults
-            const categoryDefaults = {
-                "Gift to Family & Friends": "Gave to Irene",
-                "Petrol & Transport": "Spent on Raum",
-                "Car Maintenance & Fee's": "Spent on Raum",
-                "Groceries": "Gave to Maid (nyumbani)",
-                "Eating Out": "(OTHER) Food, Transport, Groceries, etc.",
-                "Utilities": "(OTHER) Food, Transport, Groceries, etc.",
-                "Aaliyah School Fee": "Aaliyah School Fee"
-            };
-
-            return categoryDefaults[category] || "(OTHER) Food, Transport, Groceries, etc.";
-        }
-
-        // Add these token management functions before the authorize function but after FUNCTIONS declaration
-        const TOKEN_MANAGEMENT = {
-            isTokenValid(token) {
-                if (!token) return false;
-                
-                return fetchWithTimeout(
-                    `${ENV.apiBaseUrl}spreadsheets/${SPREADSHEET_ID}/values/ExpenseResults!A1`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                )
-                .then(response => response.ok)
-                .catch(() => false);
-            },
-
-            storeToken(token) {
-                try {
-                    localStorage.setItem('expenseTrackerToken', token);
-                    localStorage.setItem('tokenTimestamp', new Date().getTime());
-                } catch (e) {
-                    console.error('Error storing token:', e);
-                }
-            },
-
-            getStoredToken() {
-                try {
-                    const token = localStorage.getItem('expenseTrackerToken');
-                    const timestamp = localStorage.getItem('tokenTimestamp');
-                    
-                    // Check if token is expired (1 hour)
-                    if (token && timestamp) {
-                        const now = new Date().getTime();
-                        const hourInMs = 60 * 60 * 1000;
-                        if (now - parseInt(timestamp) < hourInMs) {
-                            return token;
-                        }
-                    }
-                    return null;
-                } catch (e) {
-                    console.error('Error getting stored token:', e);
-                    return null;
-                }
-            },
-
-            clearStoredToken() {
-                try {
-                    localStorage.removeItem('expenseTrackerToken');
-                    localStorage.removeItem('tokenTimestamp');
-                } catch (e) {
-                    console.error('Error clearing token:', e);
-                }
-            }
-        };
-
-        // Update the FUNCTIONS object to include token management
-        const APP_FUNCTIONS = {
-            processInput,
-            authorize,
-            updateField,
-            closeError,
-            showError,
-            hideLoading,
-            showLoading,
-            updateVersion,
-            submitData,
-            handleAuthResponse,
-            displayEditableFields,
-            isTokenValid: TOKEN_MANAGEMENT.isTokenValid,
-            storeToken: TOKEN_MANAGEMENT.storeToken,
-            getStoredToken: TOKEN_MANAGEMENT.getStoredToken,
-            clearStoredToken: TOKEN_MANAGEMENT.clearStoredToken
-        };
-
-        // Update references in authorize function to use APP_FUNCTIONS
+        /** Authorization Functions */
         async function authorize() {
-            const storedToken = APP_FUNCTIONS.getStoredToken();
+            if (transactions.length === 0) {
+                showError("No Transactions", "Please enter at least one transaction before submitting.");
+                return;
+            }
+
+            showConfirmation();
+        }
+
+        function showConfirmation() {
+            const confirmation = document.querySelector('.submit-confirmation');
+            const transactionList = confirmation.querySelector('.transaction-list');
+            
+            transactionList.innerHTML = transactions.map((transaction, index) => `
+                <div class="transaction-item">
+                    <strong>Transaction ${index + 1}:</strong><br>
+                    Amount: ${transaction["How much money? (Tsh)"]} Tsh<br>
+                    Category: ${transaction["What's the Purchase Category"]}<br>
+                    Paid To: ${transaction["Where was the money payed to?"]}<br>
+                    Description: ${transaction["Purchase Description"]}
+                </div>
+            `).join('');
+
+            confirmation.classList.add('show');
+        }
+
+        function closeConfirmation() {
+            document.querySelector('.submit-confirmation').classList.remove('show');
+        }
+
+        async function confirmSubmit() {
+            closeConfirmation();
+            const storedToken = TOKEN_MANAGEMENT.getStoredToken();
             
             if (storedToken) {
-                const isValid = await APP_FUNCTIONS.isTokenValid(storedToken);
+                const isValid = await TOKEN_MANAGEMENT.isTokenValid(storedToken);
                 if (isValid) {
                     submitData(storedToken);
                     return;
                 }
-                APP_FUNCTIONS.clearStoredToken();
+                TOKEN_MANAGEMENT.clearStoredToken();
             }
 
-            window.tokenClient = google.accounts.oauth2.initTokenClient({
+            tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: window.CLIENT_ID,
                 scope: SCOPES,
                 callback: handleAuthResponse
             });
             
-            window.tokenClient.requestAccessToken();
+            tokenClient.requestAccessToken();
         }
 
-        // Update handleAuthResponse to use APP_FUNCTIONS
-        function handleAuthResponse(response) {
+        async function handleAuthResponse(response) {
             if (response.error) {
                 console.error('Auth Error:', response.error);
                 showError(
@@ -1649,12 +1581,12 @@
                     "Failed to authenticate with Google. Please try again.",
                     response.error
                 );
-                APP_FUNCTIONS.clearStoredToken();
+                TOKEN_MANAGEMENT.clearStoredToken();
                 return;
             }
 
             try {
-                APP_FUNCTIONS.storeToken(response.access_token);
+                TOKEN_MANAGEMENT.storeToken(response.access_token);
                 submitData(response.access_token);
             } catch (error) {
                 console.error('Auth Handler Error:', error);
@@ -1666,315 +1598,155 @@
             }
         }
 
-        function showLoading() {
-            document.querySelector('.loading-overlay').style.display = 'flex';
-        }
-
-        function hideLoading() {
-            document.querySelector('.loading-overlay').style.display = 'none';
-        }
-
-        function showError(title, message, details) {
-            const notification = document.querySelector('.error-notification');
-            notification.querySelector('.error-title').textContent = title;
-            notification.querySelector('.error-message').innerHTML = `
-                <p>${message}</p>
-                ${details ? `<p><strong>Details:</strong> ${details}</p>` : ''}
-                ${message.includes('Authentication') ? '<p><strong>Solution:</strong> Please try submitting again to re-authenticate.</p>' : ''}
-                ${message.includes('permission') ? '<p><strong>Solution:</strong> Please ensure you have edit access to the spreadsheet.</p>' : ''}
-            `;
-            notification.classList.add('show');
-        }
-
-        /* Modify the updateVersion function to also update the document title */
-        function updateVersion(type = 'patch') {
+        async function submitData(token) {
+            showLoading();
             try {
-                switch(type) {
-                    case 'major':
-                        VERSION.major = Number(VERSION.major) + 1;
-                        VERSION.minor = 0;
-                        VERSION.patch = 0;
-                        break;
-                    case 'minor':
-                        VERSION.minor = Number(VERSION.minor) + 1;
-                        VERSION.patch = 0;
-                        break;
-                    case 'patch':
-                        VERSION.patch = Number(VERSION.patch) + 1;
-                        break;
+                if (!transactions || transactions.length === 0) {
+                    throw new Error('No transactions to submit');
                 }
+
+                // Submit each transaction
+                for (const transaction of transactions) {
+                    if (!validateExpenseData(transaction)) {
+                        throw new Error('Invalid expense data');
+                    }
+
+                    // Update training patterns for each transaction
+                    const patterns = loadTrainingPatterns() || {};
+                    const key = `${transaction["What's the Purchase Category"]}|${transaction["Where was the money payed to?"]}`;
+                    
+                    if (!patterns[key]) {
+                        patterns[key] = {
+                            category: transaction["What's the Purchase Category"],
+                            paidTo: transaction["Where was the money payed to?"],
+                            keywords: new Set(),
+                            frequency: 0,
+                            amounts: []
+                        };
+                    }
+
+                    const words = transaction["Purchase Description"]
+                        .toLowerCase()
+                        .split(/\s+/)
+                        .filter(word => word.length > 3);
+                    
+                    words.forEach(word => patterns[key].keywords.add(word));
+                    patterns[key].frequency++;
+                    patterns[key].amounts.push(parseFloat(transaction["How much money? (Tsh)"]));
+
+                    storeTrainingPatterns(patterns);
+                }
+
+                showSuccess(`Successfully submitted ${transactions.length} transaction${transactions.length > 1 ? 's' : ''}`);
+                clearForm();
                 
-                updateVersionDisplay();
-                localStorage.setItem('expenseTrackerVersion', VERSION.toString());
-            } catch (e) {
-                console.error('Error updating version:', e);
-            }
-        }
-
-        /* Add a separate function for version display updates */
-        function updateVersionDisplay() {
-            try {
-                const versionString = `v${VERSION.toString()}`;
-                document.title = `Expense Tracker ${versionString}`;
-                const versionElements = document.querySelectorAll('.version');
-                versionElements.forEach(el => {
-                    el.textContent = versionString;
-                });
-            } catch (e) {
-                console.error('Error updating version display:', e);
-            }
-        }
-
-        /* Add timeout handling for fetch requests */
-        const FETCH_TIMEOUT = 30000; // 30 seconds
-
-        async function fetchWithTimeout(url, options) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-            
-            try {
-                const response = await fetch(url, {
-                    ...options,
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                return response;
             } catch (error) {
-                clearTimeout(timeoutId);
-                if (error.name === 'AbortError') {
-                    throw new Error('Request timed out');
-                }
-                throw error;
+                console.error('Submit Error:', error);
+                showError(
+                    "Submission Failed",
+                    "Failed to submit transactions.",
+                    error.message
+                );
+            } finally {
+                hideLoading();
             }
         }
 
-        /* Add environment handling */
-        const ENV = {
-            isProd: window.location.hostname !== 'localhost',
-            get apiBaseUrl() {
-                return this.isProd ? 
-                    'https://sheets.googleapis.com/v4/' : 
-                    'http://localhost:3000/api/';
-            }
-        };
-
-        /* Add success notification */
-        function showSuccess(message) {
-            const notification = document.createElement('div');
-            notification.className = 'success-notification show';
-            notification.innerHTML = `
-                <div class="success-content">
-                    <div class="success-message">${message}</div>
-                </div>
-            `;
-            document.body.appendChild(notification);
-            setTimeout(() => {
-                notification.remove();
-            }, 3000);
-        }
-
-        /* Add enhanced error handling */
-        function handleSubmitError(error) {
-            hideLoading();
-            console.error('Submit Error:', error);
+        function validateExpenseData(data) {
+            const required = [
+                "Date of Transaction",
+                "Where did the money come from?",
+                "How much money? (Tsh)",
+                "What's the Purchase Category",
+                "Purchase Description",
+                "Where was the money payed to?"
+            ];
             
-            let errorTitle = "Submission Failed";
-            let errorMessage = "An error occurred while submitting your data.";
-            let errorDetails = error.message;
-
-            if (error.message.includes("timeout")) {
-                errorTitle = "Request Timeout";
-                errorMessage = "The request took too long to complete. Please try again.";
-            } else if (error.message.includes("Invalid expense data")) {
-                errorTitle = "Validation Error";
-                errorMessage = "Please fill in all required fields.";
-            }
-
-            showError(errorTitle, errorMessage, errorDetails);
-        }
-
-        function showEditModal(field, value, type) {
-            const modal = document.querySelector('.edit-modal');
-            const overlay = document.querySelector('.edit-overlay');
-            const content = modal.querySelector('.edit-modal-content');
-            
-            currentEditField = field;
-            
-            let inputHtml = '';
-            switch(type) {
-                case 'date':
-                    inputHtml = `<input type="date" class="editable-input" value="${value}">`;
-                    break;
-                case 'number':
-                    inputHtml = `<input type="number" class="editable-input" value="${value}" min="0" step="1000">`;
-                    break;
-                case 'category':
-                    const categoryOptions = paidToOptions
-                        .filter(option => !option.toLowerCase().startsWith('spent') && !option.toLowerCase().startsWith('gave'))
-                        .map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
-                        .join("");
-                    inputHtml = `<select class="editable-select">${categoryOptions}</select>`;
-                    break;
-                case 'paidTo':
-                    const paidToOptionsHtml = paidToOptions
-                        .map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
-                        .join("");
-                    inputHtml = `<select class="editable-select">${paidToOptionsHtml}</select>`;
-                    break;
-                default:
-                    inputHtml = `<input type="text" class="editable-input" value="${value}">`;
-            }
-            
-            content.innerHTML = inputHtml;
-            modal.classList.add('show');
-            overlay.classList.add('show');
-            
-            const input = content.querySelector('input, select');
-            input.focus();
-
-            // Add keyboard event listeners
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveEdit();
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    closeEditModal();
-                }
+            return required.every(field => {
+                const value = data[field];
+                return value !== undefined && value !== null && value !== '';
             });
-
-            // Close modal when clicking overlay
-            overlay.addEventListener('click', closeEditModal);
         }
 
-        function closeEditModal() {
-            const modal = document.querySelector('.edit-modal');
-            const overlay = document.querySelector('.edit-overlay');
-            modal.classList.remove('show');
-            overlay.classList.remove('show');
-            currentEditField = null;
+        function clearForm() {
+            document.getElementById("inputText").value = "";
+            document.getElementById("editableContainer").innerHTML = "";
+            transactions = [];
+            currentTransactionIndex = 0;
+            updateTransactionCounter();
         }
 
-        function saveEdit() {
+        /** Training Data Functions */
+        function storeTrainingPatterns(patterns) {
             try {
-                const modal = document.querySelector('.edit-modal');
-                const input = modal.querySelector('input, select');
-                const newValue = input.value.trim();
-                
-                if (!newValue) {
-                    showError("Invalid Input", "Please enter a valid value.");
-                    return;
-                }
-                
-                if (transactions[currentTransactionIndex]) {
-                    const oldValue = transactions[currentTransactionIndex][currentEditField];
-                    
-                    // Validate input based on field type
-                    if (currentEditField === 'How much money? (Tsh)' && isNaN(newValue)) {
-                        showError("Invalid Amount", "Please enter a valid number.");
-                        return;
-                    }
-                    
-                    transactions[currentTransactionIndex][currentEditField] = newValue;
-                    
-                    // Mark transaction as edited
-                    if (!transactions[currentTransactionIndex].editedFields) {
-                        transactions[currentTransactionIndex].editedFields = new Set();
-                    }
-                    transactions[currentTransactionIndex].editedFields.add(currentEditField);
-                    
-                    // Store training data for future predictions
-                    storeEditTrainingData(currentEditField, oldValue, newValue, transactions[currentTransactionIndex]);
-                    
-                    // Refresh display
-                    displayEditableFields(transactions[currentTransactionIndex]);
-                    
-                    // Show success indicator
-                    showSuccess("Field updated successfully");
-                }
-                
-                closeEditModal();
-            } catch (error) {
-                console.error('Error saving edit:', error);
-                showError("Save Error", "Failed to save changes. Please try again.");
+                localStorage.setItem('expensePatterns', JSON.stringify(patterns));
+            } catch (e) {
+                console.error('Error storing patterns:', e);
+            }
+        }
+
+        function loadTrainingPatterns() {
+            try {
+                const stored = localStorage.getItem('expensePatterns');
+                return stored ? JSON.parse(stored) : null;
+            } catch (e) {
+                console.error('Error loading patterns:', e);
+                return null;
             }
         }
 
         function storeEditTrainingData(field, oldValue, newValue, transaction) {
-            const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
-            
-            // Create a key based on the description text
-            const key = transaction["Purchase Description"].toLowerCase();
-            
-            if (!trainingData[key]) {
-                trainingData[key] = {
-                    corrections: {},
-                    frequency: 0
-                };
-            }
-            
-            if (!trainingData[key].corrections[field]) {
-                trainingData[key].corrections[field] = [];
-            }
-            
-            trainingData[key].corrections[field].push({
-                from: oldValue,
-                to: newValue,
-                timestamp: new Date().toISOString()
-            });
-            
-            trainingData[key].frequency++;
-            
-            localStorage.setItem('editTrainingData', JSON.stringify(trainingData));
-        }
-
-        function applyHistoricalTraining(text, analysis) {
-            const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
-            const key = text.toLowerCase();
-            
-            if (trainingData[key]) {
-                const corrections = trainingData[key].corrections;
-                const frequency = trainingData[key].frequency;
+            try {
+                const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
+                const key = transaction["Purchase Description"].toLowerCase();
                 
-                // Apply corrections based on historical data
-                for (const [field, changes] of Object.entries(corrections)) {
-                    if (changes.length > 0) {
-                        // Use the most recent correction
-                        const mostRecent = changes[changes.length - 1];
-                        analysis[field] = mostRecent.to;
-                        
-                        // Adjust confidence based on correction frequency
-                        analysis.confidence = Math.max(
-                            analysis.confidence,
-                            Math.min(95, 70 + (frequency * 5))
-                        );
-                    }
+                if (!trainingData[key]) {
+                    trainingData[key] = {
+                        corrections: {},
+                        frequency: 0
+                    };
                 }
+                
+                if (!trainingData[key].corrections[field]) {
+                    trainingData[key].corrections[field] = [];
+                }
+                
+                trainingData[key].corrections[field].push({
+                    from: oldValue,
+                    to: newValue,
+                    timestamp: new Date().toISOString()
+                });
+                
+                trainingData[key].frequency++;
+                
+                localStorage.setItem('editTrainingData', JSON.stringify(trainingData));
+            } catch (e) {
+                console.error('Error storing training data:', e);
             }
-            
-            return analysis;
         }
 
-        ;(function(window, document, undefined) {
-            'use strict';
+        /** Initialize on load */
+        if (document.readyState === 'loading') {
+            document.addEventListener(EVENTS.DOMCONTENTLOADED, initializeApp);
+        } else {
+            initializeApp();
+        }
 
-            // Export necessary functions to global scope
-            Object.assign(window, {
-                authorize: APP_FUNCTIONS.authorize,
-                closeError: APP_FUNCTIONS.closeError,
-                updateField: APP_FUNCTIONS.updateField,
-                processInput: APP_FUNCTIONS.processInput,
-                // Add any other functions that need to be globally available
-                showError: APP_FUNCTIONS.showError,
-                hideLoading: APP_FUNCTIONS.hideLoading,
-                showLoading: APP_FUNCTIONS.showLoading,
-                updateVersion: APP_FUNCTIONS.updateVersion,
-                submitData: APP_FUNCTIONS.submitData
-            });
-
-        })(window, document);
+        // Make functions available globally
+        Object.assign(window, {
+            closeError,
+            closeEditModal,
+            saveEdit,
+            showEditModal,
+            processInput,
+            authorize,
+            confirmSubmit,
+            navigateTransaction,
+            closeConfirmation
+        });
     </script>
     <script src="https://apis.google.com/js/api.js" defer></script>
     <script src="https://accounts.google.com/gsi/client" defer></script>
 </body>
 </html>
+
