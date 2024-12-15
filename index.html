@@ -1467,12 +1467,126 @@
             background: var(--bg-input);
             font-family: monospace;
         }
+
+        /* Mobile Layout Improvements */
+        @media screen and (max-width: 768px) {
+            body {
+                position: relative;
+                height: 100%;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .container {
+                width: 90%;
+                min-width: 90%;
+                height: auto;
+                min-height: 100vh;
+                padding: 12px;
+                display: flex;
+                flex-direction: column;
+                border-radius: 0;
+                box-shadow: none;
+            }
+
+            .input-section {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: var(--bg-card);
+                padding: 12px;
+                padding-bottom: max(12px, env(safe-area-inset-bottom));
+                border-top: 1px solid var(--bg-input);
+                z-index: 100;
+                transform: translateZ(0);
+            }
+
+            .input-wrapper {
+                position: relative;
+                margin-bottom: 8px;
+            }
+
+            .input-wrapper textarea {
+                max-height: 80px;
+                padding: 10px;
+                font-size: 16px; /* Prevent zoom on iOS */
+                line-height: 1.3;
+                border-radius: 8px;
+            }
+
+            .results-section {
+                margin-bottom: 160px; /* Space for input section */
+                padding-bottom: env(safe-area-inset-bottom);
+                overflow-y: visible;
+            }
+
+            /* Adjust when keyboard is visible */
+            .container.keyboard-visible {
+                padding-bottom: 160px;
+            }
+
+            .input-section.keyboard-visible {
+                position: sticky;
+            }
+
+            /* Improve touch targets */
+            .action-buttons {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+
+            .action-button {
+                height: 44px;
+                padding: 0 12px;
+                font-size: 13px;
+            }
+
+            .button-icon {
+                font-size: 18px;
+            }
+
+            /* Improve scrolling */
+            .results-section {
+                -webkit-overflow-scrolling: touch;
+                scroll-padding-bottom: 160px;
+            }
+
+            /* Better visual hierarchy */
+            .live-preview {
+                margin: 8px 0;
+                padding: 10px;
+                border-radius: 6px;
+            }
+
+            .transaction-card {
+                margin-bottom: 10px;
+                padding: 12px;
+            }
+        }
+
+        /* iOS Specific Adjustments */
+        @supports (-webkit-touch-callout: none) {
+            .input-section {
+                padding-bottom: max(12px, env(safe-area-inset-bottom));
+            }
+
+            .results-section {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
     </style>
-    <script src="https://apis.google.com/js/api.js" defer></script>
-    <script src="https://accounts.google.com/gsi/client" defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
     <script type="module">
         import config from './config.js';
-        window.CLIENT_ID = config.clientId;
+        /* Store config in window for non-module scripts */
+        window.APP_CONFIG = {
+            clientId: config.clientId,
+            clientSecret: config.clientSecret,
+            apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0'
+        };
     </script>
     <script>
         /** Global State */
@@ -1712,62 +1826,49 @@
         /** Core Functions */
         async function initializeApp() {
             try {
-                
+                /* Wait for config to be loaded */
+                if (!window.APP_CONFIG) {
+                    throw new Error('Configuration not loaded. Please refresh the page.');
+                }
+
+                /* Initialize core objects */
                 window.ModalManager = ModalManager;
                 window.EventHandlers = EventHandlers;
                 window.transactions = [];
                 window.currentTransactionIndex = 0;
 
-                
+                /* Initialize UI elements */
                 const inputTextArea = document.querySelector('#inputText');
-                const errorClose = document.querySelector('.error-close');
-                const editOverlay = document.querySelector('.edit-overlay');
-                const container = document.querySelector('.container');
+                if (!inputTextArea) throw new Error('Input textarea not found');
 
-                if (!inputTextArea || !errorClose || !editOverlay || !container) {
-                    throw new Error('Required UI elements not found. Please refresh the page.');
-                }
+                /* Add character counter */
+                const charCounter = document.createElement('div');
+                charCounter.className = 'character-count';
+                inputTextArea.parentNode.appendChild(charCounter);
 
-                
+                /* Setup event listeners */
                 let debounceTimeout = null;
-
                 inputTextArea.addEventListener('input', (event) => {
+                    /* Update character count */
+                    const count = event.target.value.length;
+                    charCounter.textContent = `${count} characters`;
+
+                    /* Process input with debounce */
                     if (debounceTimeout) clearTimeout(debounceTimeout);
-                    debounceTimeout = setTimeout(() => processInput(), 100);
+                    debounceTimeout = setTimeout(() => processInput(), 300);
                 });
 
-                inputTextArea.addEventListener('keydown', event => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        if (debounceTimeout) clearTimeout(debounceTimeout);
-                        processInput();
-                        if (transactions.length > 0) {
-                            saveForLater();
-                        }
-                    }
-                });
+                /* Initialize Google API */
+                await initializeGoogleApi();
+                console.log('App initialization completed');
 
-                container.addEventListener('click', event => {
-                    const isInteractive = event.target.closest('input, select, button, .editable-field, .compact-field, .edit-modal');
-                    if (!isInteractive) {
-                        inputTextArea.focus();
-                    }
-                });
-
-                errorClose.addEventListener('click', closeError);
-                editOverlay.addEventListener('click', ModalManager.closeModal.bind(ModalManager));
-
-                
-                setupTouchNavigation();
-
-                
-                await AI_SYSTEM.initialize();
-
-                
-                updatePendingBadge();
+                /* Focus on textarea */
                 inputTextArea.focus();
 
-                console.log('Application initialized successfully');
+                /* Update UI state */
+                updatePendingBadge();
+
+                showSuccess('Ready to track expenses!');
             } catch (error) {
                 console.error('Initialization Error:', error);
                 showInitializationError(error.message);
@@ -2256,16 +2357,46 @@
         /** Initialize Google API */
         async function initializeGoogleApi() {
             return new Promise((resolve, reject) => {
-                gapi.load('client:auth2', async () => {
+                if (!window.APP_CONFIG || !window.APP_CONFIG.clientId) {
+                    reject(new Error('Client configuration not loaded'));
+                    return;
+                }
+
+                /* Initialize Google Identity Services */
+                const client = google.accounts.oauth2.initTokenClient({
+                    client_id: window.APP_CONFIG.clientId,
+                    scope: 'https://www.googleapis.com/auth/spreadsheets',
+                    callback: async (tokenResponse) => {
+                        if (tokenResponse.error) {
+                            reject(tokenResponse);
+                            return;
+                        }
+
+                        try {
+                            /* Initialize Google API client */
+                            await gapi.client.init({
+                                apiKey: window.APP_CONFIG.apiKey,
+                                discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                            });
+
+                            /* Set the access token */
+                            gapi.client.setToken(tokenResponse);
+                            console.log('Google API initialized successfully');
+                            resolve();
+                        } catch (error) {
+                            console.error('Google API initialization error:', error);
+                            reject(error);
+                        }
+                    }
+                });
+
+                /* Load the API client */
+                gapi.load('client', async () => {
                     try {
-                        await gapi.client.init({
-                            apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0',
-                            clientId: window.CLIENT_ID,
-                            scope: 'https://www.googleapis.com/auth/spreadsheets',
-                            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                        });
-                        resolve();
+                        /* Request token */
+                        client.requestAccessToken();
                     } catch (error) {
+                        console.error('Failed to request access token:', error);
                         reject(error);
                     }
                 });
@@ -2282,17 +2413,12 @@
             try {
                 showLoading();
                 
-                
+                /* Initialize Google API if not already initialized */
                 if (!gapi.client) {
                     await initializeGoogleApi();
                 }
 
-                
-                if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-                    await gapi.auth2.getAuthInstance().signIn();
-                }
-
-                
+                /* Submit transactions to Google Sheets */
                 for (const transaction of transactions) {
                     const values = [
                         [
@@ -2335,17 +2461,12 @@
                     throw new Error('Transaction not found');
                 }
 
-                
+                /* Initialize Google API if not already initialized */
                 if (!gapi.client) {
                     await initializeGoogleApi();
                 }
 
-                
-                if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-                    await gapi.auth2.getAuthInstance().signIn();
-                }
-
-                
+                /* Submit to Google Sheets */
                 const values = [
                     [
                         transaction["Date of Transaction"],
@@ -2369,7 +2490,7 @@
                 updatePendingBadge();
                 showSuccess('Transaction submitted successfully');
                 
-                
+                /* Refresh the pending transactions view */
                 closePendingTransactions();
                 const remaining = OfflineStorage.getPendingTransactions();
                 if (remaining.length > 0) {
@@ -2661,6 +2782,36 @@
             if (modal) modal.remove();
             if (overlay) overlay.classList.remove('show');
         };
+
+        /* Add keyboard visibility detection */
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            const container = document.querySelector('.container');
+            const inputSection = document.querySelector('.input-section');
+            const visualViewport = window.visualViewport;
+
+            if (visualViewport) {
+                visualViewport.addEventListener('resize', () => {
+                    const isKeyboardVisible = visualViewport.height < window.innerHeight;
+                    
+                    if (isKeyboardVisible) {
+                        container.classList.add('keyboard-visible');
+                        inputSection.classList.add('keyboard-visible');
+                        /* Scroll to input when keyboard shows */
+                        inputSection.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                        container.classList.remove('keyboard-visible');
+                        inputSection.classList.remove('keyboard-visible');
+                    }
+                });
+            }
+
+            /* Handle iOS scroll to input */
+            document.querySelector('#inputText').addEventListener('focus', function() {
+                setTimeout(() => {
+                    this.scrollIntoView({ behavior: 'smooth' });
+                }, 300);
+            });
+        }
     </script>
 </head>
 
