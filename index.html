@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com; connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://*.googleapis.com; connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com https://apis.google.com https://raw.githubusercontent.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
     <title>Expense Tracker v0.0.23</title>
     <style>
         :root {
@@ -1073,6 +1073,280 @@
         }
         .date-header .total {
             font-weight: 500;
+        }
+
+        /* Loading and Feedback Styles */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1002;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--text-muted);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .success-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1004;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .success-notification.show {
+            opacity: 1;
+        }
+
+        .error-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff4444;
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            max-width: 90%;
+            width: 400px;
+            display: none;
+            z-index: 1003;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .error-notification.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translate(-50%, -100%);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, 0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Input Section Improvements */
+        .input-wrapper {
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        .input-wrapper textarea {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-input);
+            color: var(--text-light);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            resize: none;
+            font-size: 16px;
+            line-height: 1.4;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-wrapper textarea:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.2);
+        }
+
+        .input-wrapper .character-count {
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* Action Buttons Improvements */
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .action-button {
+            position: relative;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: transform 0.2s, background-color 0.2s;
+            overflow: hidden;
+        }
+
+        .action-button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            transform: translate(-50%, -50%) scale(0);
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .action-button:active::after {
+            transform: translate(-50%, -50%) scale(2);
+        }
+
+        .primary-button {
+            background: var(--primary-color);
+            color: var(--bg-dark);
+        }
+
+        .secondary-button {
+            background: var(--bg-input);
+            color: var(--text-light);
+        }
+
+        /* Transaction Card Improvements */
+        .transaction-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: transform 0.2s;
+        }
+
+        .transaction-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .transaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .transaction-amount {
+            font-size: 1.2em;
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        .confidence-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            background: var(--bg-card);
+            color: var(--text-muted);
+        }
+
+        .transaction-details {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .transaction-field {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .field-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .field-value {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+
+        /* Mobile Optimizations */
+        @media screen and (max-width: 768px) {
+            .container {
+                padding: 12px;
+                height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            }
+
+            .input-section {
+                padding: 12px;
+                padding-bottom: max(12px, env(safe-area-inset-bottom));
+            }
+
+            .action-buttons {
+                grid-template-columns: 1fr;
+            }
+
+            .transaction-card {
+                padding: 12px;
+            }
+
+            .transaction-actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .action-button {
+                width: 100%;
+            }
+        }
+
+        /* Keyboard Navigation */
+        .input-wrapper textarea:focus + .character-count {
+            color: var(--primary-color);
+        }
+
+        *:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        /* Loading States */
+        .action-button.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .action-button.loading .button-icon {
+            animation: spin 1s linear infinite;
         }
     </style>
     <script src="https://apis.google.com/js/api.js" defer></script>
@@ -2197,6 +2471,77 @@
                 livePreview.classList.remove('show');
             }
         }
+
+        /** Submit All Pending Transactions */
+        async function submitAllPending() {
+            try {
+                showLoading();
+                const pending = OfflineStorage.getPendingTransactions();
+                
+                if (pending.length === 0) {
+                    showError('No Transactions', 'There are no transactions to submit.');
+                    return;
+                }
+
+                
+                if (!gapi.client) {
+                    await initializeGoogleApi();
+                }
+
+                
+                if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
+                    await gapi.auth2.getAuthInstance().signIn();
+                }
+
+                
+                for (const transaction of pending) {
+                    const values = [
+                        [
+                            transaction["Date of Transaction"],
+                            transaction["Where did the money come from?"],
+                            transaction["How much money? (Tsh)"],
+                            transaction["What's the Purchase Category"],
+                            transaction["Purchase Description"],
+                            transaction["Where was the money payed to?"],
+                            transaction["Confidence level"]
+                        ]
+                    ];
+
+                    await gapi.client.sheets.spreadsheets.values.append({
+                        spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                        range: 'ExpenseResults!A:G',
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values }
+                    });
+                }
+                
+                OfflineStorage.clearPendingTransactions();
+                updatePendingBadge();
+                showSuccess(`Successfully submitted ${pending.length} transaction(s)`);
+                window.closePendingTransactions();
+            } catch (error) {
+                console.error('Submit Error:', error);
+                showError('Submit Failed', error.message || 'Failed to submit transactions. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        /** Global Functions */
+        window.submitAllPending = submitAllPending;
+        window.closeTransactionReview = function() {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            if (modal) modal.remove();
+            if (overlay) overlay.classList.remove('show');
+        };
+        
+        window.closePendingTransactions = function() {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            if (modal) modal.remove();
+            if (overlay) overlay.classList.remove('show');
+        };
     </script>
 </head>
 
