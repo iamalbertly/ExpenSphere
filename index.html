@@ -34,14 +34,39 @@
         /* Load configuration */
         async function loadConfiguration() {
             try {
-                /* Direct configuration */
+                /* Try to load from localStorage first  */
+                const storedConfig = localStorage.getItem('APP_CONFIG');
+                if (storedConfig) {
+                    window.APP_CONFIG = JSON.parse(storedConfig);
+                    console.log('Configuration loaded from localStorage');
+                    return window.APP_CONFIG;
+                }
+
+                /* If no stored config, prompt for credentials  */
+                const clientId = await promptForCredential(
+                    'Google Client ID', 
+                    'Enter your Google OAuth Client ID',
+                    'Should look like: xxxxxx.apps.googleusercontent.com'
+                );
+
+                const apiKey = await promptForCredential(
+                    'Google API Key', 
+                    'Enter your Google API Key',
+                    'Should look like: AIzaSyXXXXXXXXXXXXXXXXXXXXXX'
+                );
+
+                /* Create and save configuration  */
                 window.APP_CONFIG = {
-                    clientId: '1072662115353-qcn0bqo6l8r2r7qv0a9iqhdt0jmhqj5g.apps.googleusercontent.com',
-                    clientSecret: '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',
-                    apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0'
+                    clientId: clientId,
+                    apiKey: apiKey,
+                    scope: 'https://www.googleapis.com/auth/spreadsheets',
+                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
                 };
 
-                console.log('Configuration loaded successfully');
+                /* Store in localStorage for future use  */
+                localStorage.setItem('APP_CONFIG', JSON.stringify(window.APP_CONFIG));
+                console.log('Configuration saved to localStorage');
+                
                 return window.APP_CONFIG;
             } catch (error) {
                 console.error('Configuration error:', error);
@@ -49,116 +74,88 @@
             }
         }
 
-        /* Error Handling Functions */
-        function showError(title, message) {
-            const notification = document.querySelector('.error-notification');
-            if (!notification) {
-                console.error('Error:', title, message);
-                return;
-            }
+        /* Prompt for credential */
+        function promptForCredential(title, message, hint) {
+            return new Promise((resolve, reject) => {
+                /* Create modal for credential input  */
+                const modal = document.createElement('div');
+                modal.className = 'edit-modal show';
+                modal.innerHTML = `
+                    <h3>${title}</h3>
+                    <div class="edit-modal-content">
+                        <p style="margin-bottom: 10px;">${message}</p>
+                        <input type="text" 
+                               class="credential-input" 
+                               placeholder="${hint}"
+                               style="width: 100%; padding: 8px; margin-bottom: 5px;">
+                        <small style="color: var(--text-muted);">${hint}</small>
+                    </div>
+                    <div class="edit-modal-buttons">
+                        <button class="submit-credential">Submit</button>
+                    </div>
+                `;
 
-            const titleElement = notification.querySelector('.error-title');
-            const messageElement = notification.querySelector('.error-message');
-            
-            if (titleElement && messageElement) {
-                titleElement.textContent = title;
-                messageElement.textContent = message;
-                notification.classList.add('show');
-                
-                setTimeout(() => {
-                    notification.classList.remove('show');
-                }, 5000);
-            }
-        }
+                /* Show overlay  */
+                const overlay = document.createElement('div');
+                overlay.className = 'edit-overlay show';
+                document.body.appendChild(overlay);
+                document.body.appendChild(modal);
 
-        function showSuccess(message) {
-            const existingNotification = document.querySelector('.success-notification');
-            if (existingNotification) {
-                existingNotification.remove();
-            }
+                /* Handle submission  */
+                const input = modal.querySelector('.credential-input');
+                const submitBtn = modal.querySelector('.submit-credential');
 
-            const notification = document.createElement('div');
-            notification.className = 'success-notification show';
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
-        }
+                const handleSubmit = () => {
+                    const value = input.value.trim();
+                    if (!value) {
+                        showError('Invalid Input', 'Please enter a valid credential');
+                        return;
+                    }
+                    modal.remove();
+                    overlay.remove();
+                    resolve(value);
+                };
 
-        function closeError() {
-            const notification = document.querySelector('.error-notification');
-            if (notification) {
-                notification.classList.remove('show');
-            }
-        }
-
-        /* Loading State Functions */
-        function showLoading() {
-            const overlay = document.querySelector('.loading-overlay');
-            if (overlay) overlay.style.display = 'flex';
-        }
-
-        function hideLoading() {
-            const overlay = document.querySelector('.loading-overlay');
-            if (overlay) overlay.style.display = 'none';
-        }
-
-        /* Initialize Google API */
-        async function initializeGoogleApi() {
-            try {
-                await new Promise((resolve, reject) => {
-                    gapi.load('client:auth2', {
-                        callback: resolve,
-                        onerror: reject
-                    });
+                submitBtn.addEventListener('click', handleSubmit);
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleSubmit();
                 });
 
-                await gapi.client.init({
-                    apiKey: window.APP_CONFIG.apiKey,
-                    clientId: window.APP_CONFIG.clientId,
-                    scope: 'https://www.googleapis.com/auth/spreadsheets',
-                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                });
-
-                /* Check if user is signed in  */
-                if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-                    await gapi.auth2.getAuthInstance().signIn();
-                }
-
-                console.log('Google API initialized successfully');
-                return true;
-            } catch (error) {
-                console.error('Google API initialization error:', error);
-                showError('API Error', 'Failed to initialize Google API. Please try again.');
-                return false;
-            }
+                /* Focus input  */
+                input.focus();
+            });
         }
 
-        /* Show Info Message */
-        function showInfo(title, message) {
-            const notification = document.createElement('div');
-            notification.className = 'info-notification';
-            notification.innerHTML = `
-                <div class="info-content">
-                    <div class="info-title">${title}</div>
-                    <div class="info-message">${message}</div>
-                </div>
-            `;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 8000);
+        /* Clear stored credentials */
+        function clearStoredCredentials() {
+            localStorage.removeItem('APP_CONFIG');
+            showSuccess('Credentials cleared. Refresh the page to enter new credentials.');
         }
 
-        /* Show Warning Message */
-        function showWarning(title, message) {
-            const notification = document.createElement('div');
-            notification.className = 'warning-notification';
-            notification.innerHTML = `
-                <div class="warning-content">
-                    <div class="warning-title">${title}</div>
-                    <div class="warning-message">${message}</div>
-                </div>
+        /* Add clear credentials button */
+        function addClearCredentialsButton() {
+            const container = document.querySelector('.container');
+            if (!container) return;
+
+            const button = document.createElement('button');
+            button.className = 'clear-credentials-button';
+            button.innerHTML = '🔑 Clear Stored Credentials';
+            button.onclick = clearStoredCredentials;
+            button.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 8px 16px;
+                background: var(--bg-input);
+                color: var(--text-light);
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 12px;
+                z-index: 1000;
             `;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 8000);
+
+            container.appendChild(button);
         }
 
         /* Initialize application */
@@ -169,6 +166,9 @@
                 /* Initialize core objects */
                 window.transactions = [];
                 window.currentTransactionIndex = 0;
+
+                /* Add clear credentials button */
+                addClearCredentialsButton();
 
                 /* Initialize UI elements */
                 const inputTextArea = document.querySelector('#inputText');
@@ -687,23 +687,84 @@
             }
         };
 
-        /** Initialize Google API */
+         /* Error Handling Functions */
+         function showError(title, message) {
+            const notification = document.querySelector('.error-notification');
+            if (!notification) {
+                console.error('Error:', title, message);
+                return;
+            }
+
+            const titleElement = notification.querySelector('.error-title');
+            const messageElement = notification.querySelector('.error-message');
+            
+            if (titleElement && messageElement) {
+                titleElement.textContent = title;
+                messageElement.textContent = message;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 5000);
+            }
+        }
+
+        function showSuccess(message) {
+            const existingNotification = document.querySelector('.success-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'success-notification show';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        function closeError() {
+            const notification = document.querySelector('.error-notification');
+            if (notification) {
+                notification.classList.remove('show');
+            }
+        }
+
+        /* Loading State Functions */
+        function showLoading() {
+            const overlay = document.querySelector('.loading-overlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        function hideLoading() {
+            const overlay = document.querySelector('.loading-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        /* Initialize Google API */
         async function initializeGoogleApi() {
-            return new Promise((resolve, reject) => {
-                gapi.load('client:auth2', async () => {
-                    try {
-                        await gapi.client.init({
-                            apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0',
-                            clientId: window.CLIENT_ID,
-                            scope: 'https://www.googleapis.com/auth/spreadsheets',
-                            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                        });
-                        resolve();
-                    } catch (error) {
-                        reject(error);
-                    }
+            try {
+                await new Promise((resolve, reject) => {
+                    gapi.load('client:auth2', async () => {
+                        try {
+                            await gapi.client.init({
+                                apiKey: window.APP_CONFIG.apiKey,
+                                clientId: window.APP_CONFIG.clientId,
+                                scope: window.APP_CONFIG.scope,
+                                discoveryDocs: window.APP_CONFIG.discoveryDocs
+                            });
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    });
                 });
-            });
+                console.log('Google API initialized successfully');
+            } catch (error) {
+                console.error('Google API initialization error:', error);
+                showError('Initialization Error', 'Failed to initialize Google API. Please re-enter your credentials.');
+                await loadConfiguration(); /* Re-prompt for credentials  */
+                await initializeGoogleApi(); /* Retry initialization  */
+            }
         }
 
 
