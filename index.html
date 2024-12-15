@@ -34,60 +34,11 @@
         /* Load configuration */
         async function loadConfiguration() {
             try {
-                let config;
-                
-                
-                try {
-                    const response = await fetch('./config.js');
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch config.js: ${response.status}`);
-                    }
-                    const configText = await response.text();
-                    
-                    
-                    const cleanConfigText = configText
-                        .replace(/\/\/.*/g, '') 
-                        .replace(/\/\*[\s\S]*?\*\//g, '') 
-                        .trim();
-
-                    
-                    if (cleanConfigText.includes('export default')) {
-                        const jsonStr = cleanConfigText
-                            .replace('export default', '')
-                            .replace(/;$/, '')
-                            .trim();
-                        config = JSON.parse(jsonStr);
-                    } else {
-                        
-                        config = JSON.parse(cleanConfigText);
-                    }
-                } catch (fetchError) {
-                    console.warn('Using development config:', fetchError);
-                    
-                    config = {
-                        clientId: '1072662115353-qcn0bqo6l8r2r7qv0a9iqhdt0jmhqj5g.apps.googleusercontent.com',
-                        clientSecret: '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',
-                        apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0'
-                    };
-                }
-
-                
-                if (!config || typeof config !== 'object') {
-                    throw new Error('Invalid configuration format');
-                }
-
-                if (!config.clientId) {
-                    throw new Error('Missing clientId in configuration');
-                }
-
-                if (!config.apiKey) {
-                    throw new Error('Missing apiKey in configuration');
-                }
-
+                /* Direct configuration */
                 window.APP_CONFIG = {
-                    clientId: config.clientId,
-                    clientSecret: config.clientSecret,
-                    apiKey: config.apiKey
+                    clientId: '1072662115353-qcn0bqo6l8r2r7qv0a9iqhdt0jmhqj5g.apps.googleusercontent.com',
+                    clientSecret: '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',
+                    apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0'
                 };
 
                 console.log('Configuration loaded successfully');
@@ -154,29 +105,21 @@
         /* Initialize Google API */
         async function initializeGoogleApi() {
             try {
-                
                 const origin = window.location.origin;
                 console.log('Current origin:', origin);
 
-                
                 const isLocalDev = origin.includes('127.0.0.1') || origin.includes('localhost');
                 
                 if (isLocalDev) {
                     console.log('Running in local development environment');
-                    
                     window.APP_MODE = 'offline';
-                    
-                    
                     showInfo('Local Development Mode', 
                         'Running in offline mode. Online features like Google Sheets sync are disabled. ' +
                         'You can still use offline features like saving transactions locally.'
                     );
-                    
-                    
                     return;
                 }
 
-                
                 window.APP_MODE = 'online';
                 await new Promise((resolve, reject) => {
                     gapi.load('client:auth2', {
@@ -195,7 +138,6 @@
                 console.log('Google API initialized successfully');
             } catch (error) {
                 console.error('Google API initialization error:', error);
-                
                 window.APP_MODE = 'offline';
                 showWarning('Limited Functionality', 
                     'Some online features are not available. You can still use offline features like saving transactions locally.'
@@ -456,7 +398,7 @@
             });
             
             
-            const confidence = Math.min(Math.round((highestScore / words.length) * 100) + 50, 95);
+            const confidence = Math.min(Math.round((highestScore / words.length) * 100) + 50);
             
             return {
                 category: bestCategory,
