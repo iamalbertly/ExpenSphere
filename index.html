@@ -36,7 +36,7 @@
             try {
                 let config;
                 
-                // First try to load from config.js
+                
                 try {
                     const response = await fetch('./config.js');
                     if (!response.ok) {
@@ -44,13 +44,13 @@
                     }
                     const configText = await response.text();
                     
-                    // Remove comments and normalize the text
+                    
                     const cleanConfigText = configText
-                        .replace(/\/\/.*/g, '') // Remove single-line comments
-                        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
+                        .replace(/\/\/.*/g, '') 
+                        .replace(/\/\*[\s\S]*?\*\//g, '') 
                         .trim();
 
-                    // Check if it's a module export
+                    
                     if (cleanConfigText.includes('export default')) {
                         const jsonStr = cleanConfigText
                             .replace('export default', '')
@@ -58,12 +58,12 @@
                             .trim();
                         config = JSON.parse(jsonStr);
                     } else {
-                        // Try parsing as plain object
+                        
                         config = JSON.parse(cleanConfigText);
                     }
                 } catch (fetchError) {
                     console.warn('Using development config:', fetchError);
-                    // Development fallback config
+                    
                     config = {
                         clientId: '1072662115353-qcn0bqo6l8r2r7qv0a9iqhdt0jmhqj5g.apps.googleusercontent.com',
                         clientSecret: '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',
@@ -71,7 +71,7 @@
                     };
                 }
 
-                // Validate configuration
+                
                 if (!config || typeof config !== 'object') {
                     throw new Error('Invalid configuration format');
                 }
@@ -154,6 +154,30 @@
         /* Initialize Google API */
         async function initializeGoogleApi() {
             try {
+                
+                const origin = window.location.origin;
+                console.log('Current origin:', origin);
+
+                
+                const isLocalDev = origin.includes('127.0.0.1') || origin.includes('localhost');
+                
+                if (isLocalDev) {
+                    console.log('Running in local development environment');
+                    
+                    window.APP_MODE = 'offline';
+                    
+                    
+                    showInfo('Local Development Mode', 
+                        'Running in offline mode. Online features like Google Sheets sync are disabled. ' +
+                        'You can still use offline features like saving transactions locally.'
+                    );
+                    
+                    
+                    return;
+                }
+
+                
+                window.APP_MODE = 'online';
                 await new Promise((resolve, reject) => {
                     gapi.load('client:auth2', {
                         callback: resolve,
@@ -161,11 +185,6 @@
                     });
                 });
 
-                // Get the current origin
-                const origin = window.location.origin;
-                console.log('Current origin:', origin);
-
-                // Initialize the client
                 await gapi.client.init({
                     apiKey: window.APP_CONFIG.apiKey,
                     clientId: window.APP_CONFIG.clientId,
@@ -173,26 +192,43 @@
                     discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
                 });
 
-                // Handle local development
-                if (origin.includes('127.0.0.1') || origin.includes('localhost')) {
-                    console.log('Running in local development environment');
-                    showError('Development Environment', 
-                        'Please add ' + origin + ' to your Google Cloud Console authorized origins. ' +
-                        'Go to Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client IDs and add this origin.'
-                    );
-                    return; // Don't throw error in development
-                }
-
                 console.log('Google API initialized successfully');
             } catch (error) {
                 console.error('Google API initialization error:', error);
-                if (error.details && error.details.includes('Not a valid origin')) {
-                    showError('API Error', 'Please add ' + window.location.origin + ' to your Google Cloud Console authorized origins.');
-                } else {
-                    showError('API Error', 'Failed to initialize Google API. Please try again later.');
-                }
-                throw error;
+                
+                window.APP_MODE = 'offline';
+                showWarning('Limited Functionality', 
+                    'Some online features are not available. You can still use offline features like saving transactions locally.'
+                );
             }
+        }
+
+        /* Show Info Message */
+        function showInfo(title, message) {
+            const notification = document.createElement('div');
+            notification.className = 'info-notification';
+            notification.innerHTML = `
+                <div class="info-content">
+                    <div class="info-title">${title}</div>
+                    <div class="info-message">${message}</div>
+                </div>
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 8000);
+        }
+
+        /* Show Warning Message */
+        function showWarning(title, message) {
+            const notification = document.createElement('div');
+            notification.className = 'warning-notification';
+            notification.innerHTML = `
+                <div class="warning-content">
+                    <div class="warning-title">${title}</div>
+                    <div class="warning-message">${message}</div>
+                </div>
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 8000);
         }
 
         /* Initialize application */
@@ -242,6 +278,506 @@
             }
         }
 
+        function showInitializationError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #ff4444;
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                text-align: center;
+                z-index: 9999;
+                max-width: 80%;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            `;
+            errorDiv.innerHTML = `
+                <h3 style="margin: 0 0 10px 0">Initialization Error</h3>
+                <p style="margin: 0">${message}</p>
+                <p style="margin: 10px 0 0 0; font-size: 0.9em">Please try refreshing the page.</p>
+                <button onclick="location.reload()" style="
+                    margin-top: 15px;
+                    padding: 8px 16px;
+                    background: white;
+                    color: #ff4444;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    transition: background-color 0.2s;
+                ">Refresh Page</button>
+            `;
+            document.body.appendChild(errorDiv);
+        }
+
+        
+        window.addEventListener('load', function() {
+            
+            const requiredElements = [
+                '#inputText',
+                '.error-close',
+                '.edit-overlay',
+                '.container',
+                '#editableContainer',
+                '.edit-modal',
+                '.loading-overlay'
+            ];
+
+            const missingElements = requiredElements.filter(selector => 
+                !document.querySelector(selector)
+            );
+
+            if (missingElements.length > 0) {
+                console.error('Missing required elements:', missingElements);
+                showInitializationError(`Missing required elements: ${missingElements.join(', ')}`);
+                return;
+            }
+
+            
+            initializeApp().catch(error => {
+                console.error('Failed to initialize app:', error);
+                showInitializationError(error.message);
+            });
+        });
+
+        /** Core Functions */
+        function processInput() {
+            const inputText = document.getElementById("inputText").value;
+            const livePreview = document.querySelector('.live-preview');
+            
+            try {
+                if (!inputText.trim()) {
+                    document.getElementById("editableContainer").innerHTML = "";
+                    transactions = [];
+                    currentTransactionIndex = 0;
+                    updateTransactionCounter();
+                    livePreview.classList.remove('show');
+                    return;
+                }
+
+                const analysis = analyzeTextContext(inputText.trim());
+                
+                
+                livePreview.innerHTML = `
+                    <div class="confidence-indicator confidence-${getConfidenceLevel(analysis.confidence)}">
+                        ${analysis.amount ? analysis.amount.toLocaleString() + ' Tsh' : 'No amount detected'} • 
+                        ${analysis.category} • 
+                        ${analysis.confidence}% confident
+                    </div>
+                    <div class="feedback-buttons">
+                        <button onclick="provideFeedback(true)" class="feedback-button positive" title="Correct Analysis">✓</button>
+                        <button onclick="provideFeedback(false)" class="feedback-button negative" title="Incorrect Analysis">✗</button>
+                    </div>
+                `;
+                livePreview.classList.add('show');
+
+                
+                window.currentAnalysis = {
+                    input: inputText.trim(),
+                    analysis: analysis
+                };
+
+                
+                const transaction = {
+                    "Date of Transaction": new Date().toISOString().split("T")[0],
+                    "Where did the money come from?": "ALBERT",
+                    "How much money? (Tsh)": analysis.amount.toString(),
+                    "What's the Purchase Category": analysis.category,
+                    "Purchase Description": inputText.trim(),
+                    "Where was the money payed to?": analysis.paidTo,
+                    "Confidence level": `${analysis.confidence}%`
+                };
+
+                transactions = [transaction];
+                currentTransactionIndex = 0;
+                displayEditableFields(transaction);
+                updateTransactionCounter();
+                
+            } catch (error) {
+                console.error('Process Input Error:', error);
+                livePreview.innerHTML = `<span style="color: #ff4444;">Error: ${error.message}</span>`;
+                livePreview.classList.add('show');
+            }
+        }
+
+        function getConfidenceLevel(confidence) {
+            if (confidence >= 80) return 'high';
+            if (confidence >= 60) return 'medium';
+            return 'low';
+        }
+
+        function analyzeTextContext(text) {
+            const lowerText = text.toLowerCase();
+            const words = lowerText.split(/\s+/);
+            
+            
+            const amount = extractAmount(lowerText);
+            
+            
+            const scores = {
+                "Groceries & Household": 0,
+                "Gift to Family & Friends": 0,
+                "Petrol & Transport": 0,
+                "Medical & Medicine": 0,
+                "Utilities & Bills": 0,
+                "Eating Out & Entertainment": 0
+            };
+            
+            
+            words.forEach(word => {
+                
+                if (['home', 'maid', 'nyumbani', 'groceries', 'food', 'milk', 'rice'].includes(word)) {
+                    scores["Groceries & Household"] += 1;
+                }
+                
+                
+                if (['gave', 'irene', 'gift', 'send', 'support'].includes(word)) {
+                    scores["Gift to Family & Friends"] += 1;
+                }
+                
+                
+                if (['petrol', 'fuel', 'transport', 'fare', 'taxi'].includes(word)) {
+                    scores["Petrol & Transport"] += 1;
+                }
+            });
+            
+            
+            let bestCategory = "(OTHER) Food, Transport, Groceries, etc.";
+            let highestScore = 0;
+            
+            Object.entries(scores).forEach(([category, score]) => {
+                if (score > highestScore) {
+                    highestScore = score;
+                    bestCategory = category;
+                }
+            });
+            
+            
+            const confidence = Math.min(Math.round((highestScore / words.length) * 100) + 50, 95);
+            
+            return {
+                category: bestCategory,
+                confidence: confidence,
+                amount: amount,
+                paidTo: determinePaidTo(text, bestCategory)
+            };
+        }
+
+        function determinePaidTo(text, category) {
+            const lowerText = text.toLowerCase();
+            
+            
+            if (lowerText.includes('irene')) return "Gave to Irene";
+            if (lowerText.includes('maid') || (lowerText.includes('home') && !lowerText.includes('irene'))) {
+                return "Gave to Maid (nyumbani)";
+            }
+            
+            
+            const defaults = {
+                "Groceries & Household": "Gave to Maid (nyumbani)",
+                "Gift to Family & Friends": "Gave to Irene",
+                "Petrol & Transport": "Spent on Raum"
+            };
+            
+            return defaults[category] || "(OTHER) Food, Transport, Groceries, etc.";
+        }
+
+        function extractAmount(text) {
+            const patterns = [
+                /(\d+)\s*k\b/i,                    
+                /(\d+)\s*thousand\b/i,             
+                /(\d+),(\d{3})/,                   
+                /(\d+)\s*tsh/i,                    
+                /(\d+)/                            
+            ];
+
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    let amount = parseInt(match[1]);
+                    if (pattern.toString().includes('k') || pattern.toString().includes('thousand')) {
+                        amount *= 1000;
+                    }
+                    return amount;
+                }
+            }
+            return 0;
+        }
+
+        function displayEditableFields(data) {
+            if (!data) return;
+
+            const container = document.getElementById("editableContainer");
+            if (!container) return;
+            container.innerHTML = '';
+
+            
+            const fields = [
+                { field: "Date of Transaction", fullWidth: false },
+                { field: "How much money? (Tsh)", fullWidth: false },
+                { field: "What's the Purchase Category", fullWidth: true },
+                { field: "Where was the money payed to?", fullWidth: true },
+                { field: "Purchase Description", fullWidth: true },
+                { field: "Confidence level", fullWidth: false }
+            ];
+
+            fields.forEach(({ field, fullWidth }) => {
+                const fieldDiv = document.createElement("div");
+                fieldDiv.className = `editable-field${fullWidth ? ' full-width' : ''}`;
+                fieldDiv.onclick = () => ModalManager.showEditModal(field, data[field]);
+
+                const label = document.createElement("div");
+                label.className = "editable-label";
+                label.textContent = field;
+
+                const value = document.createElement("div");
+                value.className = "editable-value";
+                value.textContent = data[field] || '';
+
+                fieldDiv.appendChild(label);
+                fieldDiv.appendChild(value);
+                container.appendChild(fieldDiv);
+            });
+        }
+
+        function processAndReview() {
+            processInput();
+            if (transactions.length > 0) {
+                showTransactionReview();
+            }
+        }
+
+        function showTransactionReview() {
+            if (transactions.length === 0) {
+                showError("No Transactions", "Please enter a transaction first.");
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'edit-modal show';
+            modal.style.maxWidth = '800px';
+            modal.innerHTML = `
+                <h3>Review Transaction${transactions.length > 1 ? 's' : ''}</h3>
+                <div class="transaction-review">
+                    ${transactions.map((t, i) => `
+                        <div class="transaction-card">
+                            <div class="transaction-header">
+                                <span class="transaction-amount">${parseInt(t["How much money? (Tsh)"]).toLocaleString()} Tsh</span>
+                                <span class="confidence-badge">${t["Confidence level"]}</span>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-field">
+                                    <span class="field-label">Category</span>
+                                    <span class="field-value">${t["What's the Purchase Category"]}</span>
+                                </div>
+                                <div class="transaction-field">
+                                    <span class="field-label">Paid To</span>
+                                    <span class="field-value">${t["Where was the money payed to?"]}</span>
+                                </div>
+                                <div class="transaction-field">
+                                    <span class="field-label">Description</span>
+                                    <span class="field-value">${t["Purchase Description"]}</span>
+                                </div>
+                            </div>
+                            <div class="transaction-actions">
+                                <button onclick="editTransaction(${i})" class="action-button secondary">
+                                    <span class="button-icon">✏️</span> Edit
+                                </button>
+                                <button onclick="removeTransaction(${i})" class="action-button danger">
+                                    <span class="button-icon">🗑️</span> Remove
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="modal-footer">
+                    <div class="total-amount">
+                        Total: ${transactions.reduce((sum, t) => sum + parseInt(t["How much money? (Tsh)"]), 0).toLocaleString()} Tsh
+                    </div>
+                    <div class="modal-actions">
+                        <button onclick="submitOnline()" class="action-button primary">
+                            <span class="button-icon">📤</span> Submit Online
+                        </button>
+                        <button onclick="saveAllForLater()" class="action-button secondary">
+                            <span class="button-icon">💾</span> Save for Later
+                        </button>
+                        <button onclick="closeTransactionReview()" class="action-button secondary">Close</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            const overlay = document.querySelector('.edit-overlay');
+            overlay.classList.add('show');
+        }
+
+        /** Transaction Management Functions */
+        function showPendingTransactions() {
+            const pending = OfflineStorage.getPendingTransactions();
+            if (pending.length === 0) {
+                showError("No Pending Transactions", "There are no transactions saved for later submission.");
+                return;
+            }
+
+            
+            const groupedByDate = pending.reduce((groups, t) => {
+                const date = t["Date of Transaction"];
+                if (!groups[date]) groups[date] = [];
+                groups[date].push(t);
+                return groups;
+            }, {});
+
+            const modal = document.createElement('div');
+            modal.className = 'edit-modal show';
+            modal.style.maxWidth = '800px';
+            modal.innerHTML = `
+                <h3>Saved Transactions (${pending.length})</h3>
+                <div class="transaction-review">
+                    ${Object.entries(groupedByDate).map(([date, transactions]) => `
+                        <div class="date-group">
+                            <button class="date-header" onclick="toggleDateGroup(this)">
+                                <span class="date">${new Date(date).toLocaleDateString()}</span>
+                                <span class="count">${transactions.length} transaction${transactions.length > 1 ? 's' : ''}</span>
+                                <span class="total">${transactions.reduce((sum, t) => sum + parseInt(t["How much money? (Tsh)"]), 0).toLocaleString()} Tsh</span>
+                            </button>
+                            <div class="date-transactions">
+                                ${transactions.map(t => `
+                                    <div class="transaction-card">
+                                        <div class="transaction-header">
+                                            <span class="transaction-amount">${parseInt(t["How much money? (Tsh)"]).toLocaleString()} Tsh</span>
+                                            <span class="confidence-badge">${t["Confidence level"]}</span>
+                                        </div>
+                                        <div class="transaction-details">
+                                            <div class="transaction-field">
+                                                <span class="field-label">Category</span>
+                                                <span class="field-value">${t["What's the Purchase Category"]}</span>
+                                            </div>
+                                            <div class="transaction-field">
+                                                <span class="field-label">Paid To</span>
+                                                <span class="field-value">${t["Where was the money payed to?"]}</span>
+                                            </div>
+                                            <div class="transaction-field">
+                                                <span class="field-label">Description</span>
+                                                <span class="field-value">${t["Purchase Description"]}</span>
+                                            </div>
+                                        </div>
+                                        <div class="transaction-actions">
+                                            <button onclick="submitPendingTransaction('${t.id}')" class="action-button primary">
+                                                <span class="button-icon">📤</span> Submit
+                                            </button>
+                                            <button onclick="removePendingTransaction('${t.id}')" class="action-button danger">
+                                                <span class="button-icon">🗑️</span> Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="modal-footer">
+                    <div class="total-amount">
+                        Total: ${pending.reduce((sum, t) => sum + parseInt(t["How much money? (Tsh)"]), 0).toLocaleString()} Tsh
+                    </div>
+                    <div class="modal-actions">
+                        <button onclick="submitAllPending()" class="action-button primary">
+                            <span class="button-icon">📤</span> Submit All
+                        </button>
+                        <button onclick="closePendingTransactions()" class="action-button secondary">Close</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            const overlay = document.querySelector('.edit-overlay');
+            overlay.classList.add('show');
+        }
+
+        /** Add styles for date groups */
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            .date-group {
+                margin-bottom: 16px;
+            }
+            .date-header {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px;
+                background: var(--bg-input);
+                border: none;
+                border-radius: 8px;
+                color: var(--text-light);
+                cursor: pointer;
+                margin-bottom: 8px;
+            }
+            .date-header:hover {
+                background: var(--primary-color);
+                color: var(--bg-dark);
+            }
+            .date-transactions {
+                display: none;
+            }
+            .date-transactions.show {
+                display: block;
+            }
+            .date-header .count {
+                color: var(--text-muted);
+            }
+            .date-header:hover .count {
+                color: var(--bg-dark);
+            }
+            .date-header .total {
+                font-weight: 500;
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+        /** Toggle date group visibility */
+        window.toggleDateGroup = function(button) {
+            const transactions = button.nextElementSibling;
+            transactions.classList.toggle('show');
+        };
+
+        /** Remove pending transaction */
+        window.removePendingTransaction = function(id) {
+            if (confirm('Are you sure you want to remove this transaction?')) {
+                OfflineStorage.removePendingTransaction(id);
+                updatePendingBadge();
+                closePendingTransactions();
+                const remaining = OfflineStorage.getPendingTransactions();
+                if (remaining.length > 0) {
+                    showPendingTransactions();
+                }
+                showSuccess('Transaction removed successfully');
+            }
+        };
+
+        /** Initialize Google API */
+        async function initializeGoogleApi() {
+            return new Promise((resolve, reject) => {
+                gapi.load('client:auth2', async () => {
+                    try {
+                        await gapi.client.init({
+                            apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0',
+                            clientId: window.CLIENT_ID,
+                            scope: 'https://www.googleapis.com/auth/spreadsheets',
+                            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                        });
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
+        }
+
+
+
         /* Bootstrap application */
         async function bootstrapApplication() {
             try {
@@ -270,6 +806,160 @@
             document.addEventListener('DOMContentLoaded', bootstrapApplication);
         } else {
             bootstrapApplication();
+        }
+
+        /* Update submitTransaction to handle offline mode */
+        async function submitTransaction() {
+            if (transactions.length === 0) {
+                showError("No Transaction", "Please enter a transaction first.");
+                return;
+            }
+
+            try {
+                showLoading();
+                
+                if (window.APP_MODE === 'offline') {
+                    
+                    for (const transaction of transactions) {
+                        OfflineStorage.savePendingTransaction(transaction);
+                    }
+                    showSuccess('Transaction saved for later submission');
+                    updatePendingBadge();
+                    clearForm();
+                    return;
+                }
+
+                
+                if (!gapi.client) {
+                    await initializeGoogleApi();
+                }
+
+                for (const transaction of transactions) {
+                    const values = [
+                        [
+                            transaction["Date of Transaction"],
+                            transaction["Where did the money come from?"],
+                            transaction["How much money? (Tsh)"],
+                            transaction["What's the Purchase Category"],
+                            transaction["Purchase Description"],
+                            transaction["Where was the money payed to?"],
+                            transaction["Confidence level"]
+                        ]
+                    ];
+
+                    await gapi.client.sheets.spreadsheets.values.append({
+                        spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                        range: 'ExpenseResults!A:G',
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values }
+                    });
+                }
+                
+                showSuccess('Transaction submitted successfully');
+                clearForm();
+            } catch (error) {
+                console.error('Submit Error:', error);
+                
+                for (const transaction of transactions) {
+                    OfflineStorage.savePendingTransaction(transaction);
+                }
+                showWarning('Offline Save', 
+                    'Could not submit online. Transaction has been saved locally and can be submitted later.'
+                );
+                updatePendingBadge();
+                clearForm();
+            } finally {
+                hideLoading();
+            }
+        }
+
+        /* Offline Storage */
+        const OfflineStorage = {
+            savePendingTransaction(transaction) {
+                try {
+                    const pending = this.getPendingTransactions();
+                    transaction.id = Date.now().toString();
+                    transaction.savedAt = new Date().toISOString();
+                    pending.push(transaction);
+                    localStorage.setItem('pendingTransactions', JSON.stringify(pending));
+                    updatePendingBadge();
+                    return true;
+                } catch (error) {
+                    console.error('Save pending transaction error:', error);
+                    return false;
+                }
+            },
+
+            getPendingTransactions() {
+                try {
+                    return JSON.parse(localStorage.getItem('pendingTransactions')) || [];
+                } catch {
+                    return [];
+                }
+            },
+
+            removePendingTransaction(id) {
+                try {
+                    const pending = this.getPendingTransactions();
+                    const filtered = pending.filter(t => t.id !== id);
+                    localStorage.setItem('pendingTransactions', JSON.stringify(filtered));
+                    updatePendingBadge();
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+
+            clearPendingTransactions() {
+                localStorage.removeItem('pendingTransactions');
+                updatePendingBadge();
+            }
+        };
+
+        /* Update Pending Badge */
+        function updatePendingBadge() {
+            const badge = document.querySelector('.pending-badge');
+            if (!badge) return;
+
+            const pending = OfflineStorage.getPendingTransactions();
+            badge.textContent = pending.length;
+            badge.style.display = pending.length > 0 ? 'block' : 'none';
+        }
+
+        /* Clear Form */
+        function clearForm() {
+            const inputText = document.getElementById('inputText');
+            if (inputText) inputText.value = '';
+            
+            window.transactions = [];
+            window.currentTransactionIndex = 0;
+            
+            const editableContainer = document.getElementById('editableContainer');
+            if (editableContainer) editableContainer.innerHTML = '';
+            
+            const livePreview = document.querySelector('.live-preview');
+            if (livePreview) livePreview.classList.remove('show');
+            
+            updateTransactionCounter();
+        }
+
+        /* Update Transaction Counter */
+        function updateTransactionCounter() {
+            const indicator = document.querySelector('.transaction-indicator');
+            const prevBtn = document.getElementById('prevTransaction');
+            const nextBtn = document.getElementById('nextTransaction');
+            
+            if (!indicator || !prevBtn || !nextBtn) return;
+            
+            if (window.transactions && window.transactions.length > 0) {
+                indicator.textContent = `${window.currentTransactionIndex + 1} of ${window.transactions.length}`;
+                prevBtn.disabled = window.currentTransactionIndex === 0;
+                nextBtn.disabled = window.currentTransactionIndex === window.transactions.length - 1;
+            } else {
+                indicator.textContent = 'No Transactions';
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+            }
         }
     </script>
 
@@ -1841,6 +2531,79 @@
 
             .results-section {
                 padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
+
+        /* Notification Styles */
+        .info-notification,
+        .warning-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px;
+            border-radius: 8px;
+            max-width: 90%;
+            width: 400px;
+            z-index: 1003;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .info-notification {
+            background: var(--bg-input);
+            color: var(--text-light);
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .warning-notification {
+            background: #FFA726;
+            color: var(--bg-dark);
+        }
+
+        .info-title,
+        .warning-title {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .info-message,
+        .warning-message {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        /* Mode Indicator */
+        .mode-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            background: var(--bg-input);
+            color: var(--text-muted);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mode-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #FFA726;
+        }
+
+        .mode-indicator.online::before {
+            background: #4CAF50;
+        }
+
+        @media screen and (max-width: 768px) {
+            .mode-indicator {
+                bottom: 80px;
             }
         }
     </style>
