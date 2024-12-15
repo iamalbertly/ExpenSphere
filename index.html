@@ -1037,6 +1037,43 @@
         .error-notification {
             z-index: 1003;
         }
+
+        /* Add styles for date groups */
+        .date-group {
+            margin-bottom: 16px;
+        }
+        .date-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: var(--bg-input);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-light);
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+        .date-header:hover {
+            background: var(--primary-color);
+            color: var(--bg-dark);
+        }
+        .date-transactions {
+            display: none;
+        }
+        .date-transactions.show {
+            display: block;
+        }
+        .date-header .count {
+            color: var(--text-muted);
+        }
+        .date-header:hover .count {
+            color: var(--bg-dark);
+        }
+        .date-header .total {
+            font-weight: 500;
+        }
     </style>
     <script src="https://apis.google.com/js/api.js" defer></script>
     <script src="https://accounts.google.com/gsi/client" defer></script>
@@ -1069,7 +1106,7 @@
                 messageElement.textContent = message;
                 notification.classList.add('show');
                 
-                // Auto-hide after 5 seconds
+                
                 setTimeout(closeError, 5000);
             }
         }
@@ -1110,13 +1147,13 @@
                 const touchEndX = e.changedTouches[0].clientX;
                 const diff = touchStartX - touchEndX;
                 
-                // Minimum swipe distance of 50px
+                
                 if (Math.abs(diff) > 50) {
                     if (diff > 0) {
-                        // Swipe left - next
+                        
                         navigateTransaction(1);
                     } else {
-                        // Swipe right - previous
+                        
                         navigateTransaction(-1);
                     }
                 }
@@ -1138,7 +1175,7 @@
             const prevBtn = document.getElementById('prevTransaction');
             const nextBtn = document.getElementById('nextTransaction');
             
-            if (!indicator || !prevBtn || !nextBtn) return; // Guard against missing elements
+            if (!indicator || !prevBtn || !nextBtn) return; 
             
             if (transactions.length > 0) {
                 indicator.textContent = `${currentTransactionIndex + 1} of ${transactions.length}`;
@@ -1203,7 +1240,7 @@
         /** AI System Mock */
         const AI_SYSTEM = {
             async initialize() {
-                // Mock initialization
+                
                 return Promise.resolve();
             }
         };
@@ -1228,7 +1265,7 @@
                 modal.classList.add('show');
                 overlay.classList.add('show');
                 
-                // Focus and select the input
+                
                 const input = content.querySelector('input');
                 input.focus();
                 input.select();
@@ -1282,13 +1319,13 @@
         /** Core Functions */
         async function initializeApp() {
             try {
-                // Initialize core objects
+                
                 window.ModalManager = ModalManager;
                 window.EventHandlers = EventHandlers;
                 window.transactions = [];
                 window.currentTransactionIndex = 0;
 
-                // Initialize UI elements
+                
                 const inputTextArea = document.querySelector('#inputText');
                 const errorClose = document.querySelector('.error-close');
                 const editOverlay = document.querySelector('.edit-overlay');
@@ -1298,7 +1335,7 @@
                     throw new Error('Required UI elements not found. Please refresh the page.');
                 }
 
-                // Set up event listeners
+                
                 let debounceTimeout = null;
 
                 inputTextArea.addEventListener('input', (event) => {
@@ -1327,13 +1364,13 @@
                 errorClose.addEventListener('click', closeError);
                 editOverlay.addEventListener('click', ModalManager.closeModal.bind(ModalManager));
 
-                // Initialize touch navigation
+                
                 setupTouchNavigation();
 
-                // Initialize AI system
+                
                 await AI_SYSTEM.initialize();
 
-                // Update UI state
+                
                 updatePendingBadge();
                 inputTextArea.focus();
 
@@ -1379,9 +1416,9 @@
             document.body.appendChild(errorDiv);
         }
 
-        // Wait for all scripts to load before initializing
+        
         window.addEventListener('load', function() {
-            // Check for required elements
+            
             const requiredElements = [
                 '#inputText',
                 '.error-close',
@@ -1402,7 +1439,7 @@
                 return;
             }
 
-            // Initialize the application
+            
             initializeApp().catch(error => {
                 console.error('Failed to initialize app:', error);
                 showInitializationError(error.message);
@@ -1426,7 +1463,7 @@
 
                 const analysis = analyzeTextContext(inputText.trim());
                 
-                // Show live preview with feedback buttons
+                
                 livePreview.innerHTML = `
                     <div class="confidence-indicator confidence-${getConfidenceLevel(analysis.confidence)}">
                         ${analysis.amount ? analysis.amount.toLocaleString() + ' Tsh' : 'No amount detected'} • 
@@ -1440,13 +1477,13 @@
                 `;
                 livePreview.classList.add('show');
 
-                // Store current analysis for feedback
+                
                 window.currentAnalysis = {
                     input: inputText.trim(),
                     analysis: analysis
                 };
 
-                // Process for display
+                
                 const transaction = {
                     "Date of Transaction": new Date().toISOString().split("T")[0],
                     "Where did the money come from?": "ALBERT",
@@ -1479,10 +1516,10 @@
             const lowerText = text.toLowerCase();
             const words = lowerText.split(/\s+/);
             
-            // Extract amount first
+            
             const amount = extractAmount(lowerText);
             
-            // Initialize scores for each category
+            
             const scores = {
                 "Groceries & Household": 0,
                 "Gift to Family & Friends": 0,
@@ -1492,25 +1529,25 @@
                 "Eating Out & Entertainment": 0
             };
             
-            // Process each word
+            
             words.forEach(word => {
-                // Grocery indicators
+                
                 if (['home', 'maid', 'nyumbani', 'groceries', 'food', 'milk', 'rice'].includes(word)) {
                     scores["Groceries & Household"] += 1;
                 }
                 
-                // Gift indicators
+                
                 if (['gave', 'irene', 'gift', 'send', 'support'].includes(word)) {
                     scores["Gift to Family & Friends"] += 1;
                 }
                 
-                // Transport indicators
+                
                 if (['petrol', 'fuel', 'transport', 'fare', 'taxi'].includes(word)) {
                     scores["Petrol & Transport"] += 1;
                 }
             });
             
-            // Find highest scoring category
+            
             let bestCategory = "(OTHER) Food, Transport, Groceries, etc.";
             let highestScore = 0;
             
@@ -1521,7 +1558,7 @@
                 }
             });
             
-            // Calculate confidence based on score
+            
             const confidence = Math.min(Math.round((highestScore / words.length) * 100) + 50, 95);
             
             return {
@@ -1535,13 +1572,13 @@
         function determinePaidTo(text, category) {
             const lowerText = text.toLowerCase();
             
-            // Check for specific names first
+            
             if (lowerText.includes('irene')) return "Gave to Irene";
             if (lowerText.includes('maid') || (lowerText.includes('home') && !lowerText.includes('irene'))) {
                 return "Gave to Maid (nyumbani)";
             }
             
-            // Category-based defaults
+            
             const defaults = {
                 "Groceries & Household": "Gave to Maid (nyumbani)",
                 "Gift to Family & Friends": "Gave to Irene",
@@ -1553,11 +1590,11 @@
 
         function extractAmount(text) {
             const patterns = [
-                /(\d+)\s*k\b/i,                    // matches "50k" or "50 k"
-                /(\d+)\s*thousand\b/i,             // matches "50thousand" or "50 thousand"
-                /(\d+),(\d{3})/,                   // matches "50,000"
-                /(\d+)\s*tsh/i,                    // matches "50 tsh"
-                /(\d+)/                            // matches any number as last resort
+                /(\d+)\s*k\b/i,                    
+                /(\d+)\s*thousand\b/i,             
+                /(\d+),(\d{3})/,                   
+                /(\d+)\s*tsh/i,                    
+                /(\d+)/                            
             ];
 
             for (const pattern of patterns) {
@@ -1580,7 +1617,7 @@
             if (!container) return;
             container.innerHTML = '';
 
-            // Fields to display and their configurations
+            
             const fields = [
                 { field: "Date of Transaction", fullWidth: false },
                 { field: "How much money? (Tsh)", fullWidth: false },
@@ -1688,39 +1725,58 @@
                 return;
             }
 
+            
+            const groupedByDate = pending.reduce((groups, t) => {
+                const date = t["Date of Transaction"];
+                if (!groups[date]) groups[date] = [];
+                groups[date].push(t);
+                return groups;
+            }, {});
+
             const modal = document.createElement('div');
             modal.className = 'edit-modal show';
             modal.style.maxWidth = '800px';
             modal.innerHTML = `
                 <h3>Saved Transactions (${pending.length})</h3>
                 <div class="transaction-review">
-                    ${pending.map((t, i) => `
-                        <div class="transaction-card">
-                            <div class="transaction-header">
-                                <span class="transaction-amount">${parseInt(t["How much money? (Tsh)"]).toLocaleString()} Tsh</span>
-                                <span class="confidence-badge">${t["Confidence level"]}</span>
-                            </div>
-                            <div class="transaction-details">
-                                <div class="transaction-field">
-                                    <span class="field-label">Category</span>
-                                    <span class="field-value">${t["What's the Purchase Category"]}</span>
-                                </div>
-                                <div class="transaction-field">
-                                    <span class="field-label">Paid To</span>
-                                    <span class="field-value">${t["Where was the money payed to?"]}</span>
-                                </div>
-                                <div class="transaction-field">
-                                    <span class="field-label">Description</span>
-                                    <span class="field-value">${t["Purchase Description"]}</span>
-                                </div>
-                            </div>
-                            <div class="transaction-actions">
-                                <button onclick="submitPendingTransaction('${t.id}')" class="action-button primary">
-                                    <span class="button-icon">📤</span> Submit
-                                </button>
-                                <button onclick="removePendingTransaction('${t.id}')" class="action-button danger">
-                                    <span class="button-icon">🗑️</span> Remove
-                                </button>
+                    ${Object.entries(groupedByDate).map(([date, transactions]) => `
+                        <div class="date-group">
+                            <button class="date-header" onclick="toggleDateGroup(this)">
+                                <span class="date">${new Date(date).toLocaleDateString()}</span>
+                                <span class="count">${transactions.length} transaction${transactions.length > 1 ? 's' : ''}</span>
+                                <span class="total">${transactions.reduce((sum, t) => sum + parseInt(t["How much money? (Tsh)"]), 0).toLocaleString()} Tsh</span>
+                            </button>
+                            <div class="date-transactions">
+                                ${transactions.map(t => `
+                                    <div class="transaction-card">
+                                        <div class="transaction-header">
+                                            <span class="transaction-amount">${parseInt(t["How much money? (Tsh)"]).toLocaleString()} Tsh</span>
+                                            <span class="confidence-badge">${t["Confidence level"]}</span>
+                                        </div>
+                                        <div class="transaction-details">
+                                            <div class="transaction-field">
+                                                <span class="field-label">Category</span>
+                                                <span class="field-value">${t["What's the Purchase Category"]}</span>
+                                            </div>
+                                            <div class="transaction-field">
+                                                <span class="field-label">Paid To</span>
+                                                <span class="field-value">${t["Where was the money payed to?"]}</span>
+                                            </div>
+                                            <div class="transaction-field">
+                                                <span class="field-label">Description</span>
+                                                <span class="field-value">${t["Purchase Description"]}</span>
+                                            </div>
+                                        </div>
+                                        <div class="transaction-actions">
+                                            <button onclick="submitPendingTransaction('${t.id}')" class="action-button primary">
+                                                <span class="button-icon">📤</span> Submit
+                                            </button>
+                                            <button onclick="removePendingTransaction('${t.id}')" class="action-button danger">
+                                                <span class="button-icon">🗑️</span> Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
                             </div>
                         </div>
                     `).join('')}
@@ -1743,31 +1799,107 @@
             overlay.classList.add('show');
         }
 
-        function closePendingTransactions() {
-            const modal = document.querySelector('.edit-modal');
-            const overlay = document.querySelector('.edit-overlay');
-            if (modal) modal.remove();
-            if (overlay) overlay.classList.remove('show');
+        /** Add styles for date groups */
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            .date-group {
+                margin-bottom: 16px;
+            }
+            .date-header {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px;
+                background: var(--bg-input);
+                border: none;
+                border-radius: 8px;
+                color: var(--text-light);
+                cursor: pointer;
+                margin-bottom: 8px;
+            }
+            .date-header:hover {
+                background: var(--primary-color);
+                color: var(--bg-dark);
+            }
+            .date-transactions {
+                display: none;
+            }
+            .date-transactions.show {
+                display: block;
+            }
+            .date-header .count {
+                color: var(--text-muted);
+            }
+            .date-header:hover .count {
+                color: var(--bg-dark);
+            }
+            .date-header .total {
+                font-weight: 500;
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+        /** Toggle date group visibility */
+        window.toggleDateGroup = function(button) {
+            const transactions = button.nextElementSibling;
+            transactions.classList.toggle('show');
+        };
+
+        /** Remove pending transaction */
+        window.removePendingTransaction = function(id) {
+            if (confirm('Are you sure you want to remove this transaction?')) {
+                OfflineStorage.removePendingTransaction(id);
+                updatePendingBadge();
+                closePendingTransactions();
+                const remaining = OfflineStorage.getPendingTransactions();
+                if (remaining.length > 0) {
+                    showPendingTransactions();
+                }
+                showSuccess('Transaction removed successfully');
+            }
+        };
+
+        /** Initialize Google API */
+        async function initializeGoogleApi() {
+            return new Promise((resolve, reject) => {
+                gapi.load('client:auth2', async () => {
+                    try {
+                        await gapi.client.init({
+                            apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0',
+                            clientId: window.CLIENT_ID,
+                            scope: 'https://www.googleapis.com/auth/spreadsheets',
+                            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                        });
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
         }
 
-        /** Google Sheets Integration */
-        async function submitOnline() {
+        /** Update submitTransaction function */
+        async function submitTransaction() {
+            if (transactions.length === 0) {
+                showError("No Transaction", "Please enter a transaction first.");
+                return;
+            }
+
             try {
                 showLoading();
                 
-                // Initialize Google API client
-                await gapi.client.init({
-                    clientId: window.CLIENT_ID,
-                    scope: 'https://www.googleapis.com/auth/spreadsheets',
-                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                });
+                
+                if (!gapi.client) {
+                    await initializeGoogleApi();
+                }
 
-                // Check if user is signed in
+                
                 if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
                     await gapi.auth2.getAuthInstance().signIn();
                 }
 
-                // Submit transactions to Google Sheets
+                
                 for (const transaction of transactions) {
                     const values = [
                         [
@@ -1776,13 +1908,14 @@
                             transaction["How much money? (Tsh)"],
                             transaction["What's the Purchase Category"],
                             transaction["Purchase Description"],
-                            transaction["Where was the money payed to?"]
+                            transaction["Where was the money payed to?"],
+                            transaction["Confidence level"]
                         ]
                     ];
 
                     await gapi.client.sheets.spreadsheets.values.append({
-                        spreadsheetId: '1234567890', // Replace with your actual spreadsheet ID
-                        range: 'Sheet1!A:F',
+                        spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                        range: 'ExpenseResults!A:G',
                         valueInputOption: 'USER_ENTERED',
                         resource: { values }
                     });
@@ -1790,7 +1923,6 @@
                 
                 showSuccess('Transaction submitted successfully');
                 clearForm();
-                closeTransactionReview();
             } catch (error) {
                 console.error('Submit Error:', error);
                 showError('Submit Failed', error.message || 'Failed to submit transaction. Please try again.');
@@ -1799,6 +1931,7 @@
             }
         }
 
+        /** Update submitPendingTransaction function */
         async function submitPendingTransaction(id) {
             try {
                 showLoading();
@@ -1809,19 +1942,17 @@
                     throw new Error('Transaction not found');
                 }
 
-                // Initialize Google API client
-                await gapi.client.init({
-                    clientId: window.CLIENT_ID,
-                    scope: 'https://www.googleapis.com/auth/spreadsheets',
-                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                });
+                
+                if (!gapi.client) {
+                    await initializeGoogleApi();
+                }
 
-                // Check if user is signed in
+                
                 if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
                     await gapi.auth2.getAuthInstance().signIn();
                 }
 
-                // Submit to Google Sheets
+                
                 const values = [
                     [
                         transaction["Date of Transaction"],
@@ -1829,13 +1960,14 @@
                         transaction["How much money? (Tsh)"],
                         transaction["What's the Purchase Category"],
                         transaction["Purchase Description"],
-                        transaction["Where was the money payed to?"]
+                        transaction["Where was the money payed to?"],
+                        transaction["Confidence level"]
                     ]
                 ];
 
                 await gapi.client.sheets.spreadsheets.values.append({
-                    spreadsheetId: '1234567890', // Replace with your actual spreadsheet ID
-                    range: 'Sheet1!A:F',
+                    spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                    range: 'ExpenseResults!A:G',
                     valueInputOption: 'USER_ENTERED',
                     resource: { values }
                 });
@@ -1844,7 +1976,7 @@
                 updatePendingBadge();
                 showSuccess('Transaction submitted successfully');
                 
-                // Refresh the pending transactions view
+                
                 closePendingTransactions();
                 const remaining = OfflineStorage.getPendingTransactions();
                 if (remaining.length > 0) {
@@ -1858,97 +1990,21 @@
             }
         }
 
-        async function submitAllPending() {
-            try {
-                showLoading();
-                const pending = OfflineStorage.getPendingTransactions();
-                
-                if (pending.length === 0) {
-                    showError('No Transactions', 'There are no transactions to submit.');
-                    return;
-                }
-
-                // Initialize Google API client
-                await gapi.client.init({
-                    clientId: window.CLIENT_ID,
-                    scope: 'https://www.googleapis.com/auth/spreadsheets',
-                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                });
-
-                // Check if user is signed in
-                if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-                    await gapi.auth2.getAuthInstance().signIn();
-                }
-
-                // Submit all transactions to Google Sheets
-                for (const transaction of pending) {
-                    const values = [
-                        [
-                            transaction["Date of Transaction"],
-                            transaction["Where did the money come from?"],
-                            transaction["How much money? (Tsh)"],
-                            transaction["What's the Purchase Category"],
-                            transaction["Purchase Description"],
-                            transaction["Where was the money payed to?"]
-                        ]
-                    ];
-
-                    await gapi.client.sheets.spreadsheets.values.append({
-                        spreadsheetId: '1234567890', // Replace with your actual spreadsheet ID
-                        range: 'Sheet1!A:F',
-                        valueInputOption: 'USER_ENTERED',
-                        resource: { values }
-                    });
-                }
-                
-                OfflineStorage.clearPendingTransactions();
-                updatePendingBadge();
-                showSuccess(`Successfully submitted ${pending.length} transaction(s)`);
-                closePendingTransactions();
-            } catch (error) {
-                console.error('Submit Error:', error);
-                showError('Submit Failed', error.message || 'Failed to submit transactions. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function saveAllForLater() {
-            if (transactions.length === 0) {
-                showError("No Transactions", "Please enter at least one transaction before saving.");
-                return;
-            }
-
-            let savedCount = 0;
-            for (const transaction of transactions) {
-                if (OfflineStorage.savePendingTransaction(transaction)) {
-                    savedCount++;
-                }
-            }
-
-            if (savedCount > 0) {
-                showSuccess(`Saved ${savedCount} transaction${savedCount > 1 ? 's' : ''} for later submission`);
-                document.getElementById('inputText').value = '';
-                transactions = [];
-                currentTransactionIndex = 0;
-                document.getElementById('editableContainer').innerHTML = '';
-                updateTransactionCounter();
-                updatePendingBadge();
-            } else {
-                showError("Save Failed", "Failed to save transactions. Please try again.");
-            }
-        }
-
-        /** Modal Management Functions */
-        function closeTransactionReview() {
+        /** Global Functions */
+        window.closeTransactionReview = function() {
             const modal = document.querySelector('.edit-modal');
             const overlay = document.querySelector('.edit-overlay');
             if (modal) modal.remove();
             if (overlay) overlay.classList.remove('show');
-        }
+        };
+        
+        window.closePendingTransactions = function() {
+            const modal = document.querySelector('.edit-modal');
+            const overlay = document.querySelector('.edit-overlay');
+            if (modal) modal.remove();
+            if (overlay) overlay.classList.remove('show');
+        };
 
-        /** Global Functions */
-        window.closeTransactionReview = closeTransactionReview;
         window.closeEditModal = function() {
             const modal = document.querySelector('.edit-modal');
             const overlay = document.querySelector('.edit-overlay');
@@ -2013,13 +2069,13 @@
                     timestamp: new Date().toISOString()
                 });
                 
-                // Update patterns based on feedback
+                
                 const words = input.toLowerCase().split(/\s+/);
                 words.forEach(word => {
                     if (!data.patterns[word]) {
                         data.patterns[word] = { category: analysis.category, confidence: 1 };
                     } else {
-                        // Reinforce or weaken the pattern based on feedback
+                        
                         if (isPositive) {
                             data.patterns[word].confidence++;
                         } else {
@@ -2088,12 +2144,17 @@
             try {
                 showLoading();
                 
-                // Check if user is signed in
+                
+                if (!gapi.client) {
+                    await initializeGoogleApi();
+                }
+
+                
                 if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
                     await gapi.auth2.getAuthInstance().signIn();
                 }
 
-                // Submit transactions to Google Sheets
+                
                 for (const transaction of transactions) {
                     const values = [
                         [
@@ -2102,13 +2163,14 @@
                             transaction["How much money? (Tsh)"],
                             transaction["What's the Purchase Category"],
                             transaction["Purchase Description"],
-                            transaction["Where was the money payed to?"]
+                            transaction["Where was the money payed to?"],
+                            transaction["Confidence level"]
                         ]
                     ];
 
                     await gapi.client.sheets.spreadsheets.values.append({
-                        spreadsheetId: '1234567890', // Replace with your actual spreadsheet ID
-                        range: 'Sheet1!A:F',
+                        spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                        range: 'ExpenseResults!A:G',
                         valueInputOption: 'USER_ENTERED',
                         resource: { values }
                     });
@@ -2191,10 +2253,7 @@
         </div>
     </div>
 
-    <!-- Main application script -->
-    <script>
-        // ... rest of your existing code ...
-    </script>
+
 </body>
 
 </html>
