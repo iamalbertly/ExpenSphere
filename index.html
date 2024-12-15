@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com; connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://sheets.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com; connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* http://127.0.0.1:* http://localhost:* https://sheets.googleapis.com https://accounts.google.com https://apis.googleapis.com https://*.googleapis.com https://raw.githubusercontent.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src https://accounts.google.com">
     <title>Expense Tracker v0.0.23</title>
     <style>
         :root {
@@ -58,12 +60,15 @@
         }
 
         .results-section {
-            order: -1; /* Move results to top */
+            order: -1;
+            /* Move results to top */
             display: flex;
             flex-direction: column;
             gap: var(--spacing-unit);
-            min-height: 200px; /* Ensure minimum height */
-            max-height: 60vh; /* Maximum height on larger screens */
+            min-height: 200px;
+            /* Ensure minimum height */
+            max-height: 60vh;
+            /* Maximum height on larger screens */
             overflow-y: auto;
         }
 
@@ -151,7 +156,8 @@
             align-items: flex-end;
         }
 
-        .submit-button, .save-button {
+        .submit-button,
+        .save-button {
             height: 40px;
             padding: 0 16px;
             border: none;
@@ -176,7 +182,8 @@
             color: var(--text-light);
         }
 
-        .submit-button:hover, .save-button:hover {
+        .submit-button:hover,
+        .save-button:hover {
             transform: translateY(-1px);
         }
 
@@ -201,7 +208,8 @@
                 gap: 8px;
             }
 
-            .submit-button, .save-button {
+            .submit-button,
+            .save-button {
                 width: 100%;
                 justify-content: center;
             }
@@ -245,8 +253,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Enhanced Error Notification */
@@ -503,7 +516,8 @@
 
             .edit-modal .editable-input,
             .edit-modal .editable-select {
-                font-size: 16px; /* Prevent zoom on iOS */
+                font-size: 16px;
+                /* Prevent zoom on iOS */
                 padding: 12px;
             }
 
@@ -810,6 +824,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="loading-overlay">
         <div class="loading-spinner"></div>
@@ -825,19 +840,19 @@
         <h1 style="margin-bottom: 20px;">ExpenSphere <span class="version">v0.0.29</span></h1>
         <div class="results-section">
             <div class="transaction-navigation">
-                <button class="nav-button" id="prevTransaction" disabled onclick="navigateTransaction(-1)">← Previous</button>
+                <button class="nav-button" id="prevTransaction" disabled onclick="navigateTransaction(-1)">←
+                    Previous</button>
                 <span class="transaction-indicator">1 of 1</span>
-                <button class="nav-button" id="nextTransaction" disabled onclick="navigateTransaction(1)">Next →</button>
+                <button class="nav-button" id="nextTransaction" disabled onclick="navigateTransaction(1)">Next
+                    →</button>
             </div>
             <div class="editable-container" id="editableContainer"></div>
         </div>
         <div class="input-section">
-            <textarea 
-                id="inputText" 
+            <textarea id="inputText"
                 placeholder="Type your expense description and press Enter... (Use && or 'Also' for multiple transactions)"
                 rows="3"
-                style="width: 100%; padding: 10px; background: var(--bg-input); color: var(--text-light); border: none; border-radius: 8px; resize: vertical;"
-            ></textarea>
+                style="width: 100%; padding: 10px; background: var(--bg-input); color: var(--text-light); border: none; border-radius: 8px; resize: vertical;"></textarea>
             <div class="action-buttons">
                 <button class="submit-button" onclick="EventHandlers.handleSubmit()">Submit Online</button>
                 <button class="save-button" onclick="EventHandlers.handleSave()">Save for Later</button>
@@ -871,7 +886,7 @@
     </script>
     <script>
         /** Global Functions - Defined First */
-        window.closeEditModal = function() {
+        window.closeEditModal = function () {
             const modal = document.querySelector('.edit-modal');
             const overlay = document.querySelector('.edit-overlay');
             if (modal) modal.classList.remove('show');
@@ -879,17 +894,17 @@
             window.currentEditField = null;
         };
 
-        window.closeError = function() {
+        window.closeError = function () {
             document.querySelector('.error-notification')?.classList.remove('show');
         };
 
-        window.saveEdit = function() {
+        window.saveEdit = function () {
             if (window.EventHandlers) {
                 window.EventHandlers.handleSaveEdit();
             }
         };
 
-        window.showEditModal = function(field, value) {
+        window.showEditModal = function (field, value) {
             if (window.ModalManager) {
                 window.ModalManager.showEditModal(field, value);
             }
@@ -900,9 +915,9 @@
             console.log('🔄 processInput called');
             const inputText = document.getElementById("inputText").value;
             console.log('📝 Input text:', inputText);
-            
+
             try {
-                // Clear display if input is empty
+
                 if (!inputText.trim()) {
                     console.log('⚠️ Input is empty, clearing display');
                     document.getElementById("editableContainer").innerHTML = "";
@@ -912,10 +927,10 @@
                     return;
                 }
 
-                // Split multiple transactions if they exist
+
                 const transactionTexts = inputText.split(/\s*(?:&&|Also)\s*/i);
                 console.log('📑 Split into transactions:', transactionTexts);
-                transactions = []; // Reset transactions array
+                transactions = [];
                 currentTransactionIndex = 0;
 
                 transactionTexts.forEach((text, index) => {
@@ -924,8 +939,8 @@
 
                     const analysis = analyzeTextContext(text.trim());
                     console.log('🤖 AI Analysis result:', analysis);
-                    
-                    // Determine paid to based on category and context
+
+
                     let paidTo = determinePaidTo(text.trim(), analysis.category);
                     console.log('👤 Determined Paid To:', paidTo);
 
@@ -944,8 +959,8 @@
                 });
 
                 console.log(`\n✅ Total transactions processed: ${transactions.length}`);
-                
-                // Display the first transaction if there are any
+
+
                 if (transactions.length > 0) {
                     console.log('🎯 Displaying first transaction:', transactions[currentTransactionIndex]);
                     displayEditableFields(transactions[currentTransactionIndex]);
@@ -953,17 +968,17 @@
                 } else {
                     console.log('⚠️ No transactions to display');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Process Input Error:', error);
-                document.getElementById("editableContainer").innerHTML = 
+                document.getElementById("editableContainer").innerHTML =
                     `<div style="color: var(--text-muted); padding: 20px; text-align: center;">
                         Error processing input: ${error.message}
                     </div>`;
             }
         }
 
-        // Make processInput available globally
+
         window.processInput = processInput;
 
         /** Event Listeners */
@@ -977,8 +992,8 @@
             console.log('✅ Found input textarea:', inputTextArea);
 
             let debounceTimeout = null;
-            
-            // Input event handler with shorter debounce time
+
+
             inputTextArea.addEventListener('input', (event) => {
                 console.log('📝 Input event triggered:', event.target.value);
                 if (debounceTimeout) {
@@ -987,10 +1002,10 @@
                 debounceTimeout = setTimeout(() => {
                     console.log('⏱️ Debounce timeout triggered, calling processInput');
                     processInput();
-                }, 100); // Reduced debounce time for more immediate feedback
+                }, 100);
             });
 
-            // Handle Enter key press
+
             inputTextArea.addEventListener('keydown', event => {
                 console.log('⌨️ Keydown event:', event.key);
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -1030,8 +1045,8 @@
         const ENV = {
             isProd: window.location.hostname !== 'localhost',
             get apiBaseUrl() {
-                return this.isProd ? 
-                    'https://sheets.googleapis.com/v4/' : 
+                return this.isProd ?
+                    'https://sheets.googleapis.com/v4/' :
                     'http://localhost:3000/api/';
             }
         };
@@ -1138,7 +1153,7 @@
             async fetchWithTimeout(url, options = {}) {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-                
+
                 try {
                     const response = await fetch(url, {
                         ...options,
@@ -1186,7 +1201,7 @@
 
                 const titleElement = notification.querySelector('.error-title');
                 const messageElement = notification.querySelector('.error-message');
-                
+
                 if (titleElement && messageElement) {
                     titleElement.textContent = title;
                     messageElement.innerHTML = `
@@ -1333,24 +1348,24 @@
 
             try {
                 showLoading();
-            const storedToken = TOKEN_MANAGEMENT.getStoredToken();
-            
-            if (storedToken) {
-                const isValid = await TOKEN_MANAGEMENT.isTokenValid(storedToken);
-                if (isValid) {
-                        await submitData(transactions);
-                return;
-            }
-                TOKEN_MANAGEMENT.clearStoredToken();
-            }
+                const storedToken = TOKEN_MANAGEMENT.getStoredToken();
 
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: window.CLIENT_ID,
-                scope: SCOPES,
-                callback: handleAuthResponse
-            });
-            
-            tokenClient.requestAccessToken();
+                if (storedToken) {
+                    const isValid = await TOKEN_MANAGEMENT.isTokenValid(storedToken);
+                    if (isValid) {
+                        await submitData(transactions);
+                        return;
+                    }
+                    TOKEN_MANAGEMENT.clearStoredToken();
+                }
+
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: window.CLIENT_ID,
+                    scope: SCOPES,
+                    callback: handleAuthResponse
+                });
+
+                tokenClient.requestAccessToken();
             } catch (error) {
                 console.error('Submit Error:', error);
                 showError("Submit Failed", "Failed to submit transactions. Please try again.");
@@ -1384,14 +1399,14 @@
         function updatePendingBadge() {
             const pendingCount = OfflineStorage.getPendingTransactions().length;
             const saveButton = document.querySelector('.save-button');
-            
-            // Remove existing badge
+
+
             const existingBadge = saveButton.querySelector('.pending-badge');
             if (existingBadge) {
                 existingBadge.remove();
             }
-            
-            // Add new badge if there are pending transactions
+
+
             if (pendingCount > 0) {
                 const badge = document.createElement('span');
                 badge.className = 'pending-badge';
@@ -1406,16 +1421,16 @@
         async function initializeApp() {
             console.log('🚀 Initializing application');
             try {
-                // Initialize managers and handlers first
+
                 window.ModalManager = ModalManager;
                 window.EventHandlers = EventHandlers;
-                
-                // Then set up event listeners
+
+
                 setupEventListeners();
                 setupTouchNavigation();
                 await AI_SYSTEM.initialize();
                 updatePendingBadge();
-                
+
                 const inputTextArea = utils.getElement(UI.selectors.inputText);
                 if (inputTextArea) {
                     inputTextArea.focus();
@@ -1471,7 +1486,7 @@
                     "Purchase Description",
                     "Where was the money payed to?"
                 ];
-                
+
                 const missingFields = required.filter(field => {
                     const value = data[field];
                     return value === undefined || value === null || value.toString().trim() === '';
@@ -1538,8 +1553,8 @@
             console.log('✅ Found input textarea:', inputTextArea);
 
             let debounceTimeout = null;
-            
-            // Input event handler with shorter debounce time
+
+
             inputTextArea.addEventListener('input', (event) => {
                 console.log('📝 Input event triggered:', event.target.value);
                 if (debounceTimeout) {
@@ -1548,10 +1563,10 @@
                 debounceTimeout = setTimeout(() => {
                     console.log('⏱️ Debounce timeout triggered, calling processInput');
                     processInput();
-                }, 100); // Reduced debounce time for more immediate feedback
+                }, 100);
             });
 
-            // Handle Enter key press
+
             inputTextArea.addEventListener('keydown', event => {
                 console.log('⌨️ Keydown event:', event.key);
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -1585,9 +1600,9 @@
             console.log('🔄 processInput called');
             const inputText = document.getElementById("inputText").value;
             console.log('📝 Input text:', inputText);
-            
+
             try {
-                // Clear display if input is empty
+
                 if (!inputText.trim()) {
                     console.log('⚠️ Input is empty, clearing display');
                     document.getElementById("editableContainer").innerHTML = "";
@@ -1597,10 +1612,10 @@
                     return;
                 }
 
-                // Split multiple transactions if they exist
+
                 const transactionTexts = inputText.split(/\s*(?:&&|Also)\s*/i);
                 console.log('📑 Split into transactions:', transactionTexts);
-                transactions = []; // Reset transactions array
+                transactions = [];
                 currentTransactionIndex = 0;
 
                 transactionTexts.forEach((text, index) => {
@@ -1609,8 +1624,8 @@
 
                     const analysis = analyzeTextContext(text.trim());
                     console.log('🤖 AI Analysis result:', analysis);
-                    
-                    // Determine paid to based on category and context
+
+
                     let paidTo = determinePaidTo(text.trim(), analysis.category);
                     console.log('👤 Determined Paid To:', paidTo);
 
@@ -1629,8 +1644,8 @@
                 });
 
                 console.log(`\n✅ Total transactions processed: ${transactions.length}`);
-                
-                // Display the first transaction if there are any
+
+
                 if (transactions.length > 0) {
                     console.log('🎯 Displaying first transaction:', transactions[currentTransactionIndex]);
                     displayEditableFields(transactions[currentTransactionIndex]);
@@ -1638,10 +1653,10 @@
                 } else {
                     console.log('⚠️ No transactions to display');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Process Input Error:', error);
-                document.getElementById("editableContainer").innerHTML = 
+                document.getElementById("editableContainer").innerHTML =
                     `<div style="color: var(--text-muted); padding: 20px; text-align: center;">
                         Error processing input: ${error.message}
                     </div>`;
@@ -1653,39 +1668,39 @@
                 const modal = document.querySelector('.edit-modal');
                 const input = modal.querySelector('input, select');
                 const newValue = input.value.trim();
-                
+
                 if (!newValue) {
                     showError("Invalid Input", "Please enter a valid value.");
                     return;
                 }
-                
+
                 if (transactions[currentTransactionIndex]) {
                     const oldValue = transactions[currentTransactionIndex][currentEditField];
-                    
-                    // Validate input based on field type
+
+
                     if (currentEditField === 'How much money? (Tsh)' && isNaN(newValue)) {
                         showError("Invalid Amount", "Please enter a valid number.");
                         return;
                     }
-                    
+
                     transactions[currentTransactionIndex][currentEditField] = newValue;
-                    
-                    // Mark transaction as edited
+
+
                     if (!transactions[currentTransactionIndex].editedFields) {
                         transactions[currentTransactionIndex].editedFields = new Set();
                     }
                     transactions[currentTransactionIndex].editedFields.add(currentEditField);
-                    
-                    // Store training data for future predictions
+
+
                     storeEditTrainingData(currentEditField, oldValue, newValue, transactions[currentTransactionIndex]);
-                    
-                    // Refresh display
+
+
                     displayEditableFields(transactions[currentTransactionIndex]);
-                    
-                    // Show success indicator
+
+
                     showSuccess("Field updated successfully");
                 }
-                
+
                 closeEditModal();
             } catch (error) {
                 console.error('Error saving edit:', error);
@@ -1698,7 +1713,7 @@
             const indicator = document.querySelector('.transaction-indicator');
             const prevBtn = document.getElementById('prevTransaction');
             const nextBtn = document.getElementById('nextTransaction');
-            
+
             if (transactions.length > 0) {
                 indicator.textContent = `${currentTransactionIndex + 1} of ${transactions.length}`;
                 prevBtn.disabled = currentTransactionIndex === 0;
@@ -1728,26 +1743,26 @@
             try {
                 const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
                 const key = transaction["Purchase Description"].toLowerCase();
-                
+
                 if (!trainingData[key]) {
                     trainingData[key] = {
                         corrections: {},
                         frequency: 0
                     };
                 }
-                
+
                 if (!trainingData[key].corrections[field]) {
                     trainingData[key].corrections[field] = [];
                 }
-                
+
                 trainingData[key].corrections[field].push({
                     from: oldValue,
                     to: newValue,
                     timestamp: new Date().toISOString()
                 });
-                
+
                 trainingData[key].frequency++;
-                
+
                 localStorage.setItem('editTrainingData', JSON.stringify(trainingData));
             } catch (e) {
                 console.error('Error storing training data:', e);
@@ -1766,7 +1781,7 @@
         function showConfirmation() {
             const confirmation = document.querySelector('.submit-confirmation');
             const transactionList = confirmation.querySelector('.transaction-list');
-            
+
             transactionList.innerHTML = transactions.map((transaction, index) => `
                 <div class="transaction-item">
                     <strong>Transaction ${index + 1}:</strong><br>
@@ -1787,7 +1802,7 @@
         async function confirmSubmit() {
             closeConfirmation();
             const storedToken = TOKEN_MANAGEMENT.getStoredToken();
-            
+
             if (storedToken) {
                 const isValid = await TOKEN_MANAGEMENT.isTokenValid(storedToken);
                 if (isValid) {
@@ -1802,7 +1817,7 @@
                 scope: SCOPES,
                 callback: handleAuthResponse
             });
-            
+
             tokenClient.requestAccessToken();
         }
 
@@ -1810,7 +1825,7 @@
             if (response.error) {
                 console.error('Auth Error:', response.error);
                 showError(
-                    "Authentication Failed", 
+                    "Authentication Failed",
                     "Failed to authenticate with Google. Please try again.",
                     response.error
                 );
@@ -1838,13 +1853,13 @@
                     throw new Error('No transactions to submit');
                 }
 
-                // Submit each transaction
+
                 for (const transaction of transactions) {
                     if (!validateExpenseData(transaction)) {
                         throw new Error('Invalid expense data');
                     }
 
-                    // Learn from the transaction before submitting
+
                     AI_SYSTEM.learnFromHistoricalData({
                         category: transaction["What's the Purchase Category"],
                         description: transaction["Purchase Description"],
@@ -1855,7 +1870,7 @@
                 await AI_SYSTEM.savePatterns();
                 showSuccess(`Successfully submitted ${transactions.length} transaction${transactions.length > 1 ? 's' : ''}`);
                 clearForm();
-                
+
             } catch (error) {
                 console.error('Submit Error:', error);
                 showError(
@@ -1893,7 +1908,7 @@
                 container.innerHTML = '';
                 console.log('🧹 Cleared container');
 
-                // Fields to display and their configurations
+
                 const fields = [
                     { field: "Date of Transaction", fullWidth: false },
                     { field: "How much money? (Tsh)", fullWidth: false },
@@ -1928,7 +1943,7 @@
                 console.log('✨ Fields displayed successfully');
             } catch (error) {
                 console.error('❌ Display Fields Error:', error);
-                document.getElementById("editableContainer").innerHTML = 
+                document.getElementById("editableContainer").innerHTML =
                     `<div style="color: var(--text-muted); padding: 20px; text-align: center;">
                         Error displaying fields: ${error.message}
                     </div>`;
@@ -1938,26 +1953,26 @@
         function calculateConfidenceScore(transaction) {
             let baseConfidence = 0;
             const description = transaction["Purchase Description"].toLowerCase();
-            
-            // Check training data matches
+
+
             const trainingData = JSON.parse(localStorage.getItem('editTrainingData') || '{}');
             const historicalMatch = trainingData[description];
-            
+
             if (historicalMatch) {
-                // Direct match in training data
+
                 baseConfidence = 90;
-                
-                // Adjust based on frequency
+
+
                 baseConfidence += Math.min(historicalMatch.frequency * 2, 5);
             } else {
-                // Calculate based on pattern matching
+
                 const analysis = analyzeTextContext(description);
                 baseConfidence = parseInt(analysis.confidence);
 
-                // Check for partial matches in training data
+
                 const words = description.split(/\s+/);
                 let partialMatches = 0;
-                
+
                 Object.keys(trainingData).forEach(key => {
                     const keyWords = key.split(/\s+/);
                     const commonWords = words.filter(word => keyWords.includes(word));
@@ -1966,13 +1981,13 @@
                     }
                 });
 
-                // Adjust confidence based on partial matches
+
                 if (partialMatches > 0) {
                     baseConfidence += Math.min(partialMatches * 3, 10);
                 }
             }
 
-            // Adjust based on specific indicators
+
             if (description.includes('maid') && description.includes('home')) {
                 baseConfidence = Math.min(baseConfidence + 10, 95);
             }
@@ -1980,7 +1995,7 @@
                 baseConfidence = Math.min(baseConfidence + 10, 95);
             }
 
-            // Cap the confidence
+
             return Math.min(Math.round(baseConfidence), 95);
         }
 
@@ -1993,7 +2008,7 @@
 
         function handleFeedback(transaction, isPositive) {
             if (isPositive) {
-                // Store as positive example in training data
+
                 AI_SYSTEM.learnFromHistoricalData({
                     category: transaction["What's the Purchase Category"],
                     description: transaction["Purchase Description"],
@@ -2001,7 +2016,7 @@
                 });
                 showSuccess("Thanks for the feedback! This will help improve future predictions.");
             } else {
-                // Show feedback form for correction
+
                 showFeedbackForm(transaction);
             }
         }
@@ -2031,7 +2046,7 @@
                 </div>
             `;
 
-            // Add styles
+
             const style = document.createElement("style");
             style.textContent = `
                 .feedback-options {
@@ -2054,22 +2069,22 @@
             `;
             document.head.appendChild(style);
 
-            // Show modal
+
             document.body.appendChild(modal);
             const overlay = document.querySelector('.edit-overlay');
             overlay.classList.add('show');
 
-            // Add event listeners
+
             const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', () => {
                     const correctionFields = modal.querySelector('.correction-fields');
                     const correctionInputs = modal.querySelector('#correctionInputs');
-                    
+
                     if ([...checkboxes].some(cb => cb.checked)) {
                         correctionFields.style.display = 'block';
                         correctionInputs.innerHTML = '';
-                        
+
                         if (checkbox.value === 'category' && checkbox.checked) {
                             addCategorySelect(correctionInputs);
                         }
@@ -2086,10 +2101,10 @@
         function addCategorySelect(container) {
             const select = document.createElement('select');
             select.id = 'correctionCategory';
-            select.innerHTML = PURCHASE_CATEGORIES.map(cat => 
+            select.innerHTML = PURCHASE_CATEGORIES.map(cat =>
                 `<option value="${cat}">${cat}</option>`
             ).join('');
-            
+
             const wrapper = document.createElement('div');
             wrapper.style.marginBottom = '10px';
             wrapper.innerHTML = '<label>Correct Category:</label>';
@@ -2111,13 +2126,13 @@
                 "Aaliyah School Fee",
                 "(OTHER) Food, Transport, Groceries, etc."
             ];
-            
+
             const select = document.createElement('select');
             select.id = 'correctionPaidTo';
-            select.innerHTML = paidToOptions.map(opt => 
+            select.innerHTML = paidToOptions.map(opt =>
                 `<option value="${opt}">${opt}</option>`
             ).join('');
-            
+
             const wrapper = document.createElement('div');
             wrapper.innerHTML = '<label>Correct Paid To:</label>';
             wrapper.appendChild(select);
@@ -2135,7 +2150,7 @@
             const transaction = transactions[currentTransactionIndex];
             const categorySelect = document.getElementById('correctionCategory');
             const paidToSelect = document.getElementById('correctionPaidTo');
-            
+
             if (categorySelect) {
                 transaction["What's the Purchase Category"] = categorySelect.value;
             }
@@ -2143,14 +2158,14 @@
                 transaction["Where was the money payed to?"] = paidToSelect.value;
             }
 
-            // Store correction in training data
+
             AI_SYSTEM.learnFromHistoricalData({
                 category: transaction["What's the Purchase Category"],
                 description: transaction["Purchase Description"],
                 paidTo: transaction["Where was the money payed to?"]
             });
 
-            // Update display
+
             displayEditableFields(transaction);
             closeFeedbackForm();
             showSuccess("Thank you for your feedback! This will help improve future predictions.");
@@ -2193,7 +2208,7 @@
         /** Modal Management */
         const ModalManager = {
             currentField: null,
-            
+
             showEditModal(field, value) {
                 this.currentField = field;
                 const modal = document.querySelector('.edit-modal');
@@ -2201,11 +2216,11 @@
                 const content = modal.querySelector('.edit-modal-content');
 
                 content.innerHTML = this.createModalContent(field, value);
-                
+
                 modal.classList.add('show');
                 overlay.classList.add('show');
 
-                // Focus the input/select after showing modal
+
                 const input = content.querySelector('input, select');
                 if (input) {
                     input.focus();
@@ -2231,7 +2246,7 @@
                 const options = PURCHASE_CATEGORIES.map(cat =>
                     `<option value="${cat}"${cat === value ? ' selected' : ''}>${cat}</option>`
                 ).join('');
-                
+
                 return `<select class="editable-select">${options}</select>`;
             },
 
@@ -2251,7 +2266,7 @@
                 ].map(opt =>
                     `<option value="${opt}"${opt === value ? ' selected' : ''}>${opt}</option>`
                 ).join('');
-                
+
                 return `<select class="editable-select">${options}</select>`;
             },
 
@@ -2295,32 +2310,32 @@
                     const modal = document.querySelector('.edit-modal');
                     const input = modal.querySelector('input, select');
                     const newValue = input.value.trim();
-                    
+
                     if (!newValue) {
                         showError("Invalid Input", "Please enter a valid value.");
                         return;
                     }
-                    
+
                     if (transactions[currentTransactionIndex]) {
                         const oldValue = transactions[currentTransactionIndex][ModalManager.currentField];
-                        
+
                         if (ModalManager.currentField === 'How much money? (Tsh)' && isNaN(newValue)) {
                             showError("Invalid Amount", "Please enter a valid number.");
                             return;
                         }
-                        
+
                         transactions[currentTransactionIndex][ModalManager.currentField] = newValue;
-                        
+
                         if (!transactions[currentTransactionIndex].editedFields) {
                             transactions[currentTransactionIndex].editedFields = new Set();
                         }
                         transactions[currentTransactionIndex].editedFields.add(ModalManager.currentField);
-                        
+
                         storeEditTrainingData(ModalManager.currentField, oldValue, newValue, transactions[currentTransactionIndex]);
                         displayEditableFields(transactions[currentTransactionIndex]);
                         showSuccess("Field updated successfully");
                     }
-                    
+
                     ModalManager.closeModal();
                 } catch (error) {
                     console.error('Error saving edit:', error);
@@ -2333,16 +2348,16 @@
         async function initializeApp() {
             console.log('🚀 Initializing application');
             try {
-                // Initialize managers and handlers first
+
                 window.ModalManager = ModalManager;
                 window.EventHandlers = EventHandlers;
-                
-                // Then set up event listeners
+
+
                 setupEventListeners();
                 setupTouchNavigation();
                 await AI_SYSTEM.initialize();
                 updatePendingBadge();
-                
+
                 const inputTextArea = utils.getElement(UI.selectors.inputText);
                 if (inputTextArea) {
                     inputTextArea.focus();
@@ -2368,7 +2383,7 @@
             initializeApp();
         }
 
-        // Add these functions before the initializeApp function
+
 
         /** Pending Transactions Management */
         function showPendingTransactions() {
@@ -2380,7 +2395,7 @@
 
             const modal = document.createElement('div');
             modal.className = 'edit-modal show';
-            modal.style.maxWidth = '800px'; // Wider modal for better display
+            modal.style.maxWidth = '800px';
             modal.innerHTML = `
                 <h3>Pending Transactions (${pending.length})</h3>
                 <div class="pending-list">
@@ -2422,7 +2437,7 @@
                 </div>
             `;
 
-            // Add styles for the enhanced pending transactions view
+
             const style = document.createElement('style');
             style.textContent = `
                 .pending-list {
@@ -2566,18 +2581,18 @@
             const transaction = pending.find(t => t.id === id);
             if (!transaction) return;
 
-            // Load the transaction into the current transaction array
+
             transactions = [transaction];
             currentTransactionIndex = 0;
-            
-            // Display the transaction
+
+
             displayEditableFields(transaction);
             updateTransactionCounter();
-            
-            // Close the pending transactions modal
+
+
             closePendingTransactions();
-            
-            // Show success message
+
+
             showSuccess('Transaction loaded for editing');
         }
 
@@ -2593,20 +2608,20 @@
                 showLoading();
                 const pending = OfflineStorage.getPendingTransactions();
                 const transaction = pending.find(t => t.id === id);
-                
+
                 if (!transaction) {
                     throw new Error('Transaction not found');
                 }
 
-                // Submit the transaction
+
                 const success = await submitData([transaction]);
-                
+
                 if (success) {
                     OfflineStorage.removePendingTransaction(id);
                     updatePendingBadge();
                     showSuccess('Transaction submitted successfully');
-                    
-                    // Refresh the pending transactions display
+
+
                     closePendingTransactions();
                     showPendingTransactions();
                 }
@@ -2624,15 +2639,15 @@
                 console.log('🚀 Submitting all pending transactions');
                 showLoading();
                 const pending = OfflineStorage.getPendingTransactions();
-                
+
                 if (pending.length === 0) {
                     showError('No Pending Transactions', 'There are no transactions to submit.');
                     return;
                 }
 
-                // Submit all transactions
+
                 const success = await submitData(pending);
-                
+
                 if (success) {
                     OfflineStorage.clearPendingTransactions();
                     updatePendingBadge();
@@ -2703,7 +2718,7 @@
                 </div>
             `;
 
-            // Add styles for the current transaction highlight
+
             const style = document.createElement('style');
             style.textContent = `
                 .pending-item.current {
@@ -2819,18 +2834,18 @@
             confidenceThreshold: 0.75,
             learningRate: 0.1,
             maxPatterns: 2000,
-            
+
             patterns: new Map(),
             historicalData: new Map(),
-            
+
             async initialize() {
                 try {
-                    // Load patterns
+
                     const storedPatterns = localStorage.getItem('aiPatterns');
                     if (storedPatterns) {
                         const parsed = JSON.parse(storedPatterns);
                         this.patterns = new Map(Object.entries(parsed).map(([key, value]) => {
-                            // Convert keywords array back to Set if it exists
+
                             if (value.keywords) {
                                 value.keywords = new Set(Array.isArray(value.keywords) ? value.keywords : []);
                             }
@@ -2838,17 +2853,17 @@
                         }));
                     }
 
-                    // Load historical data
+
                     const storedHistory = localStorage.getItem('historicalTransactions');
                     if (storedHistory) {
                         this.historicalData = new Map(Object.entries(JSON.parse(storedHistory)));
                     }
 
-                    // Initialize with training data if no patterns exist
+
                     if (this.patterns.size === 0) {
                         this.initializeWithTrainingData();
                     }
-                   
+
                 } catch (error) {
                     console.error('AI System initialization error:', error);
                     this.initializeWithTrainingData();
@@ -2856,42 +2871,42 @@
             },
 
             initializeWithTrainingData() {
-                // Clear existing patterns
+
                 this.patterns.clear();
                 this.historicalData.clear();
 
-                // Process each training entry
+
                 INITIAL_TRAINING_DATA.forEach(entry => {
                     const key = `${entry.category}:${entry.paidTo}`;
                     const words = entry.description.toLowerCase().split(/\s+/);
-                    
+
                     let pattern = this.patterns.get(key) || {
                         category: entry.category,
                         paidTo: entry.paidTo,
                         keywords: new Set(),
                         frequency: 0,
-                        confidence: 0.8, // Initial confidence
+                        confidence: 0.8,
                         examples: []
                     };
 
-                    // Add keywords from description
+
                     words.forEach(word => {
-                        if (word.length > 2) { // Only add words longer than 2 characters
+                        if (word.length > 2) {
                             pattern.keywords.add(word);
                         }
                     });
 
-                    // Update pattern
+
                     pattern.frequency++;
                     pattern.examples.push(entry.description);
                     if (pattern.examples.length > 5) {
-                        pattern.examples.shift(); // Keep only last 5 examples
+                        pattern.examples.shift();
                     }
 
                     this.patterns.set(key, pattern);
                 });
 
-                // Save the initialized patterns
+
                 this.savePatterns();
                 console.debug('AI System initialized with training data');
             },
@@ -2920,7 +2935,7 @@
             learnFromHistoricalData(entry) {
                 const key = `${entry.category}:${entry.paidTo}`;
                 const words = entry.description.toLowerCase().split(/\s+/);
-                
+
                 let pattern = this.patterns.get(key) || {
                     category: entry.category,
                     paidTo: entry.paidTo,
@@ -2930,26 +2945,26 @@
                     examples: []
                 };
 
-                // Update keywords
+
                 words.forEach(word => {
                     if (word.length > 2) {
                         pattern.keywords.add(word);
                     }
                 });
 
-                // Update pattern metrics
+
                 pattern.frequency++;
                 pattern.examples.push(entry.description);
                 if (pattern.examples.length > 5) {
                     pattern.examples.shift();
                 }
 
-                // Adjust confidence based on frequency
+
                 pattern.confidence = Math.min(0.95, pattern.confidence + (this.learningRate * (1 - pattern.confidence)));
 
                 this.patterns.set(key, pattern);
 
-                // Update historical data
+
                 const historyKey = entry.description.toLowerCase();
                 const existingHistory = this.historicalData.get(historyKey) || {
                     category: entry.category,
@@ -2968,12 +2983,12 @@
             const lowerText = text.toLowerCase();
             const words = lowerText.split(/\s+/);
             console.log('📝 Words identified:', words);
-            
-            // Extract amount first
+
+
             const amount = extractAmount(lowerText);
             console.log('💰 Extracted amount:', amount);
-            
-            // Initialize scores for each category
+
+
             const scores = {
                 "Groceries & Household": 0,
                 "Gift to Family & Friends": 0,
@@ -2982,85 +2997,85 @@
                 "Utilities & Bills": 0,
                 "Eating Out & Entertainment": 0
             };
-            
-            // Process each word
+
+
             words.forEach(word => {
                 console.log(`\n🔤 Processing word: ${word}`);
-                // Grocery indicators
+
                 if (['home', 'maid', 'nyumbani', 'groceries', 'food', 'milk', 'rice'].includes(word)) {
                     scores["Groceries & Household"] += 1;
                     console.log('🏠 Matched Groceries & Household');
                 }
-                
-                // Gift indicators
+
+
                 if (['gave', 'irene', 'gift', 'send', 'support'].includes(word)) {
                     scores["Gift to Family & Friends"] += 1;
                     console.log('🎁 Matched Gift to Family & Friends');
                 }
-                
-                // Transport indicators
+
+
                 if (['petrol', 'fuel', 'transport', 'fare', 'taxi'].includes(word)) {
                     scores["Petrol & Transport"] += 1;
                     console.log('🚗 Matched Petrol & Transport');
                 }
             });
-            
+
             console.log('\n📊 Category scores:', scores);
-            
-            // Find highest scoring category
+
+
             let bestCategory = "(OTHER) Food, Transport, Groceries, etc.";
             let highestScore = 0;
-            
+
             Object.entries(scores).forEach(([category, score]) => {
                 if (score > highestScore) {
                     highestScore = score;
                     bestCategory = category;
                 }
             });
-            
+
             console.log('🏆 Best category:', bestCategory, 'with score:', highestScore);
-            
-            // Calculate confidence based on score
+
+
             const confidence = Math.min(Math.round((highestScore / words.length) * 100) + 50);
             console.log('📈 Calculated confidence:', confidence + '%');
-            
+
             const result = {
                 category: bestCategory,
                 confidence: confidence,
                 amount: amount,
                 paidTo: determinePaidTo(text, bestCategory)
             };
-            
+
             console.log('✅ Analysis complete:', result);
             return result;
         }
 
         function determinePaidTo(text, category) {
             const lowerText = text.toLowerCase();
-            
-            // Check for specific names first
+
+
             if (lowerText.includes('irene')) return "Gave to Irene";
             if (lowerText.includes('maid') || (lowerText.includes('home') && !lowerText.includes('irene'))) {
                 return "Gave to Maid (nyumbani)";
             }
-            
-            // Category-based defaults
+
+
             const defaults = {
                 "Groceries & Household": "Gave to Maid (nyumbani)",
                 "Gift to Family & Friends": "Gave to Irene",
                 "Petrol & Transport": "Spent on Raum"
             };
-            
+
             return defaults[category] || "(OTHER) Food, Transport, Groceries, etc.";
         }
 
         function extractAmount(text) {
             const patterns = [
-                /(\d+)\s*k\b/i,                    // matches "50k" or "50 k"
-                /(\d+)\s*thousand\b/i,             // matches "50thousand" or "50 thousand"
-                /(\d+),(\d{3})/,                   // matches "50,000"
-                /(\d+)\s*tsh/i,                    // matches "50 tsh"
-                /(\d+)/                            // matches any number as last resort
+                /(\d+)\s*k\b/i,
+                /(\d+)\s*thousand\b/i,
+                /(\d+),(\d{3})/,
+                /(\d+)\s*tsh/i,
+                /(\d+)/
             ];
 
             for (const pattern of patterns) {
@@ -3080,5 +3095,5 @@
     <script src="https://apis.google.com/js/api.js" defer></script>
     <script src="https://accounts.google.com/gsi/client" defer></script>
 </body>
-</html>
 
+</html>
