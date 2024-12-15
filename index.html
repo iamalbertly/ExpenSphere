@@ -34,22 +34,215 @@
         /* Load configuration */
         async function loadConfiguration() {
             try {
-                const response = await fetch('./config.js');
-                const configText = await response.text();
-                const configModule = new Function('return ' + configText.replace('export default', 'return'))();
+                let config;
+                
+                // First try to load from config.js
+                try {
+                    const response = await fetch('./config.js');
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch config.js: ${response.status}`);
+                    }
+                    const configText = await response.text();
+                    
+                    // Remove comments and normalize the text
+                    const cleanConfigText = configText
+                        .replace(/\/\/.*/g, '') // Remove single-line comments
+                        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
+                        .trim();
+
+                    // Check if it's a module export
+                    if (cleanConfigText.includes('export default')) {
+                        const jsonStr = cleanConfigText
+                            .replace('export default', '')
+                            .replace(/;$/, '')
+                            .trim();
+                        config = JSON.parse(jsonStr);
+                    } else {
+                        // Try parsing as plain object
+                        config = JSON.parse(cleanConfigText);
+                    }
+                } catch (fetchError) {
+                    console.warn('Using development config:', fetchError);
+                    // Development fallback config
+                    config = {
+                        clientId: '1072662115353-qcn0bqo6l8r2r7qv0a9iqhdt0jmhqj5g.apps.googleusercontent.com',
+                        clientSecret: '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',
+                        apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0'
+                    };
+                }
+
+                // Validate configuration
+                if (!config || typeof config !== 'object') {
+                    throw new Error('Invalid configuration format');
+                }
+
+                if (!config.clientId) {
+                    throw new Error('Missing clientId in configuration');
+                }
+
+                if (!config.apiKey) {
+                    throw new Error('Missing apiKey in configuration');
+                }
+
                 window.APP_CONFIG = {
-                    clientId: configModule.clientId,
-                    clientSecret: configModule.clientSecret,
-                    apiKey: 'AIzaSyBOukcVnqFX_ZYRfOfnbVr5V7QqLtg9Hn0'
+                    clientId: config.clientId,
+                    clientSecret: config.clientSecret,
+                    apiKey: config.apiKey
                 };
+
+                console.log('Configuration loaded successfully');
                 return window.APP_CONFIG;
             } catch (error) {
-                console.error('Failed to load configuration:', error);
-                throw new Error('Failed to load configuration');
+                console.error('Configuration error:', error);
+                throw new Error('Failed to load configuration: ' + error.message);
+            }
+        }
+
+        /* Error Handling Functions */
+        function showError(title, message) {
+            const notification = document.querySelector('.error-notification');
+            if (!notification) {
+                console.error('Error:', title, message);
+                return;
+            }
+
+            const titleElement = notification.querySelector('.error-title');
+            const messageElement = notification.querySelector('.error-message');
+            
+            if (titleElement && messageElement) {
+                titleElement.textContent = title;
+                messageElement.textContent = message;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 5000);
+            }
+        }
+
+        function showSuccess(message) {
+            const existingNotification = document.querySelector('.success-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'success-notification show';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        function closeError() {
+            const notification = document.querySelector('.error-notification');
+            if (notification) {
+                notification.classList.remove('show');
+            }
+        }
+
+        /* Loading State Functions */
+        function showLoading() {
+            const overlay = document.querySelector('.loading-overlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        function hideLoading() {
+            const overlay = document.querySelector('.loading-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        /* Initialize Google API */
+        async function initializeGoogleApi() {
+            try {
+                await new Promise((resolve, reject) => {
+                    gapi.load('client:auth2', {
+                        callback: resolve,
+                        onerror: reject
+                    });
+                });
+
+                // Get the current origin
+                const origin = window.location.origin;
+                console.log('Current origin:', origin);
+
+                // Initialize the client
+                await gapi.client.init({
+                    apiKey: window.APP_CONFIG.apiKey,
+                    clientId: window.APP_CONFIG.clientId,
+                    scope: 'https://www.googleapis.com/auth/spreadsheets',
+                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                });
+
+                // Handle local development
+                if (origin.includes('127.0.0.1') || origin.includes('localhost')) {
+                    console.log('Running in local development environment');
+                    showError('Development Environment', 
+                        'Please add ' + origin + ' to your Google Cloud Console authorized origins. ' +
+                        'Go to Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client IDs and add this origin.'
+                    );
+                    return; // Don't throw error in development
+                }
+
+                console.log('Google API initialized successfully');
+            } catch (error) {
+                console.error('Google API initialization error:', error);
+                if (error.details && error.details.includes('Not a valid origin')) {
+                    showError('API Error', 'Please add ' + window.location.origin + ' to your Google Cloud Console authorized origins.');
+                } else {
+                    showError('API Error', 'Failed to initialize Google API. Please try again later.');
+                }
+                throw error;
             }
         }
 
         /* Initialize application */
+        async function initializeApp() {
+            try {
+                console.log('Initializing app...');
+                
+                /* Initialize core objects */
+                window.transactions = [];
+                window.currentTransactionIndex = 0;
+
+                /* Initialize UI elements */
+                const inputTextArea = document.querySelector('#inputText');
+                if (!inputTextArea) throw new Error('Input textarea not found');
+
+                /* Add character counter */
+                const charCounter = document.createElement('div');
+                charCounter.className = 'character-count';
+                inputTextArea.parentNode.appendChild(charCounter);
+
+                /* Setup event listeners */
+                let debounceTimeout = null;
+                inputTextArea.addEventListener('input', (event) => {
+                    /* Update character count */
+                    const count = event.target.value.length;
+                    charCounter.textContent = `${count} characters`;
+
+                    /* Process input with debounce */
+                    if (debounceTimeout) clearTimeout(debounceTimeout);
+                    debounceTimeout = setTimeout(() => processInput(), 300);
+                });
+
+                /* Initialize Google API */
+                await initializeGoogleApi();
+                
+                /* Focus on textarea */
+                inputTextArea.focus();
+
+                /* Update UI state */
+                updatePendingBadge();
+
+                console.log('App initialization completed');
+                showSuccess('Ready to track expenses!');
+            } catch (error) {
+                console.error('Initialization Error:', error);
+                throw error;
+            }
+        }
+
+        /* Bootstrap application */
         async function bootstrapApplication() {
             try {
                 /* Load APIs and config in parallel */
