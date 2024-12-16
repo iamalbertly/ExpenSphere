@@ -22,7 +22,12 @@
                     /* Load Google API Client */
                     const apiScript = document.createElement('script');
                     apiScript.src = 'https://apis.google.com/js/api.js';
-                    apiScript.onload = resolve;
+                    apiScript.onload = () => {
+                        /* Initialize GAPI after loading */
+                        gapi.load('client', () => {
+                            resolve();
+                        });
+                    };
                     apiScript.onerror = reject;
                     document.head.appendChild(apiScript);
                 };
@@ -35,40 +40,30 @@
         async function initializeGoogleApi(retryCount = 0) {
             const maxRetries = 3;
             try {
-                await new Promise((resolve, reject) => {
-                    gapi.load('client', async () => {
-                        try {
-                            await gapi.client.init({
-                                apiKey: window.APP_CONFIG.apiKey,
-                                discoveryDocs: window.APP_CONFIG.discoveryDocs
-                            });
-
-                            /* Initialize Google Identity Services */
-                            const tokenClient = google.accounts.oauth2.initTokenClient({
-                                client_id: window.APP_CONFIG.clientId,
-                                scope: window.APP_CONFIG.scope,
-                                callback: (tokenResponse) => {
-                                    if (tokenResponse && tokenResponse.access_token) {
-                                        currentAccessToken = tokenResponse.access_token;
-                                        gapi.client.setToken(tokenResponse);
-                                        showSuccess('Successfully signed in');
-                                    }
-                                },
-                                error_callback: (error) => {
-                                    console.error('Token client error:', error);
-                                    showError('Authentication Error', 'Failed to initialize token client');
-                                }
-                            });
-
-                            /* Store token client globally */
-                            window.tokenClient = tokenClient;
-                            resolve();
-                        } catch (error) {
-                            console.info('Google API client initialization error:', error);
-                            reject(error);
-                        }
-                    });
+                await gapi.client.init({
+                    apiKey: window.APP_CONFIG.apiKey,
+                    discoveryDocs: window.APP_CONFIG.discoveryDocs
                 });
+
+                /* Initialize Google Identity Services */
+                const tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: window.APP_CONFIG.clientId,
+                    scope: window.APP_CONFIG.scope,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse && tokenResponse.access_token) {
+                            currentAccessToken = tokenResponse.access_token;
+                            gapi.client.setToken(tokenResponse);
+                            showSuccess('Successfully signed in');
+                        }
+                    },
+                    error_callback: (error) => {
+                        console.error('Token client error:', error);
+                        showError('Authentication Error', 'Failed to initialize token client');
+                    }
+                });
+
+                /* Store token client globally */
+                window.tokenClient = tokenClient;
                 console.log('Google API initialized successfully');
                 return true;
             } catch (error) {
@@ -349,7 +344,9 @@
                     debounceTimeout = setTimeout(() => processInput(), 300);
                 });
 
-                /* Initialize Google API */
+                /* Load configuration and APIs */
+                await loadConfiguration();
+                await loadGoogleAPIs();
                 await initializeGoogleApi();
                 
                 /* Focus on textarea */
@@ -364,6 +361,13 @@
                 console.error('Initialization Error:', error);
                 throw error;
             }
+        }
+
+        /* Bootstrap application */
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => initializeApp());
+        } else {
+            initializeApp();
         }
 
         function showInitializationError(message) {
