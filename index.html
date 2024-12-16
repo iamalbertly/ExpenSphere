@@ -352,12 +352,9 @@
         let isInitialized = false;
 
         async function initializeApp() {
-            if (isInitializing) {
-                console.log('Already initializing, skipping duplicate call');
-                return;
-            }
-            if (isInitialized) {
-                console.log('Already initialized, skipping duplicate call');
+            if (isInitializing || isInitialized) {
+                console.log('Already initializing or initialized, skipping duplicate call');
+                hideLoading(); /* Ensure loading is hidden if we're skipping */
                 return;
             }
 
@@ -402,8 +399,8 @@
                 try {
                     await loadGoogleAPIs();
                     console.log('Google APIs loaded');
-                    await initializeGoogleApi();
-                    console.log('Google APIs initialized');
+                    const initialized = await initializeGoogleApi();
+                    console.log('Google APIs initialized:', initialized ? 'success' : 'offline mode');
                 } catch (error) {
                     console.error('Failed to initialize Google APIs:', error);
                     showError('API Error', 'Failed to initialize Google APIs. Running in offline mode.');
@@ -427,57 +424,76 @@
             }
         }
 
+        /* Save current transaction for later */
+        async function saveForLater() {
+            if (!window.transactions || window.transactions.length === 0) {
+                showError("No Transaction", "Please enter a transaction first.");
+                return;
+            }
+
+            let savedCount = 0;
+            
+            for (const transaction of window.transactions) {
+                if (OfflineStorage.savePendingTransaction(transaction)) {
+                    savedCount++;
+                }
+            }
+
+            if (savedCount > 0) {
+                showSuccess(`${savedCount} transaction${savedCount > 1 ? 's' : ''} saved for later`);
+                clearForm();
+            } else {
+                showError("Save Error", "Failed to save transactions. Please try again.");
+            }
+        }
+
+        /* Save all transactions for later */
+        async function saveAllForLater() {
+            if (!window.transactions || window.transactions.length === 0) {
+                showError("No Transactions", "No transactions to save.");
+                return;
+            }
+
+            let savedCount = 0;
+            
+            for (const transaction of window.transactions) {
+                if (OfflineStorage.savePendingTransaction(transaction)) {
+                    savedCount++;
+                }
+            }
+
+            if (savedCount > 0) {
+                showSuccess(`${savedCount} transaction${savedCount > 1 ? 's' : ''} saved for later`);
+                clearForm();
+                closeTransactionReview();
+            } else {
+                showError("Save Error", "Failed to save transactions. Please try again.");
+            }
+        }
+
         /* Bootstrap application */
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 if (!isInitialized && !isInitializing) {
-                    initializeApp();
+                    initializeApp().catch(error => {
+                        console.error('Failed to initialize app:', error);
+                        showInitializationError(error.message);
+                        hideLoading(); /* Ensure loading is hidden on error */
+                    });
                 }
             });
         } else {
             if (!isInitialized && !isInitializing) {
-                initializeApp();
+                initializeApp().catch(error => {
+                    console.error('Failed to initialize app:', error);
+                    showInitializationError(error.message);
+                    hideLoading(); /* Ensure loading is hidden on error */
+                });
             }
         }
 
-        function showInitializationError(message) {
-            const errorDiv = document.createElement('div');
-            errorDiv.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: #ff4444;
-                color: white;
-                padding: 20px;
-                border-radius: 8px;
-                text-align: center;
-                z-index: 9999;
-                max-width: 80%;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            `;
-            errorDiv.innerHTML = `
-                <h3 style="margin: 0 0 10px 0">Initialization Error</h3>
-                <p style="margin: 0">${message}</p>
-                <p style="margin: 10px 0 0 0; font-size: 0.9em">Please try refreshing the page.</p>
-                <button onclick="location.reload()" style="
-                    margin-top: 15px;
-                    padding: 8px 16px;
-                    background: white;
-                    color: #ff4444;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: background-color 0.2s;
-                ">Refresh Page</button>
-            `;
-            document.body.appendChild(errorDiv);
-        }
-
-        
         window.addEventListener('load', function() {
-            
+            /* Check for required elements */
             const requiredElements = [
                 '#inputText',
                 '.error-close',
@@ -495,14 +511,18 @@
             if (missingElements.length > 0) {
                 console.error('Missing required elements:', missingElements);
                 showInitializationError(`Missing required elements: ${missingElements.join(', ')}`);
+                hideLoading(); /* Ensure loading is hidden if elements are missing */
                 return;
             }
 
-            
-            initializeApp().catch(error => {
-                console.error('Failed to initialize app:', error);
-                showInitializationError(error.message);
-            });
+            /* Initialize if not already done */
+            if (!isInitialized && !isInitializing) {
+                initializeApp().catch(error => {
+                    console.error('Failed to initialize app:', error);
+                    showInitializationError(error.message);
+                    hideLoading(); /* Ensure loading is hidden on error */
+                });
+            }
         });
 
         /** Core Functions */
@@ -962,14 +982,37 @@
         }
 
         /* Loading State Functions */
+        let loadingCount = 0;
+        let loadingTimeout = null;
+        
         function showLoading() {
+            loadingCount++;
             const overlay = document.querySelector('.loading-overlay');
-            if (overlay) overlay.style.display = 'flex';
+            if (overlay && loadingCount > 0) {
+                overlay.style.display = 'flex';
+                
+                /* Set a timeout to clear loading if it takes too long */
+                if (loadingTimeout) clearTimeout(loadingTimeout);
+                loadingTimeout = setTimeout(() => {
+                    if (loadingCount > 0) {
+                        console.warn('Loading timeout reached, forcing clear');
+                        loadingCount = 0;
+                        hideLoading();
+                    }
+                }, 10000); /* 10 second timeout */
+            }
         }
 
         function hideLoading() {
+            loadingCount = Math.max(0, loadingCount - 1);
             const overlay = document.querySelector('.loading-overlay');
-            if (overlay) overlay.style.display = 'none';
+            if (overlay && loadingCount === 0) {
+                overlay.style.display = 'none';
+                if (loadingTimeout) {
+                    clearTimeout(loadingTimeout);
+                    loadingTimeout = null;
+                }
+            }
         }
 
         /* Offline Storage */
@@ -1058,6 +1101,192 @@
                 indicator.textContent = 'No Transactions';
                 prevBtn.disabled = true;
                 nextBtn.disabled = true;
+            }
+        }
+
+        /* Transaction Navigation */
+        function navigateTransaction(direction) {
+            const newIndex = window.currentTransactionIndex + direction;
+            if (newIndex >= 0 && newIndex < window.transactions.length) {
+                window.currentTransactionIndex = newIndex;
+                displayEditableFields(window.transactions[newIndex]);
+                updateTransactionCounter();
+            }
+        }
+
+        /* Transaction Editing */
+        function editTransaction(index) {
+            if (index >= 0 && index < window.transactions.length) {
+                window.currentTransactionIndex = index;
+                displayEditableFields(window.transactions[index]);
+                updateTransactionCounter();
+                closeTransactionReview();
+            }
+        }
+
+        function removeTransaction(index) {
+            if (confirm('Are you sure you want to remove this transaction?')) {
+                window.transactions.splice(index, 1);
+                if (window.currentTransactionIndex >= window.transactions.length) {
+                    window.currentTransactionIndex = Math.max(0, window.transactions.length - 1);
+                }
+                if (window.transactions.length > 0) {
+                    displayEditableFields(window.transactions[window.currentTransactionIndex]);
+                } else {
+                    document.getElementById("editableContainer").innerHTML = "";
+                }
+                updateTransactionCounter();
+                closeTransactionReview();
+                if (window.transactions.length > 0) {
+                    showTransactionReview();
+                }
+            }
+        }
+
+        /* Modal Management */
+        const ModalManager = {
+            currentField: null,
+            currentValue: null,
+
+            showEditModal(field, value) {
+                this.currentField = field;
+                this.currentValue = value;
+                
+                const modal = document.querySelector('.edit-modal');
+                const content = modal.querySelector('.edit-modal-content');
+                
+                let inputHtml = '';
+                if (field === "What's the Purchase Category") {
+                    inputHtml = `
+                        <select class="editable-select" style="width: 100%; padding: 8px;">
+                            <option value="Groceries & Household" ${value === "Groceries & Household" ? 'selected' : ''}>Groceries & Household</option>
+                            <option value="Gift to Family & Friends" ${value === "Gift to Family & Friends" ? 'selected' : ''}>Gift to Family & Friends</option>
+                            <option value="Petrol & Transport" ${value === "Petrol & Transport" ? 'selected' : ''}>Petrol & Transport</option>
+                            <option value="Medical & Medicine" ${value === "Medical & Medicine" ? 'selected' : ''}>Medical & Medicine</option>
+                            <option value="Utilities & Bills" ${value === "Utilities & Bills" ? 'selected' : ''}>Utilities & Bills</option>
+                            <option value="Eating Out & Entertainment" ${value === "Eating Out & Entertainment" ? 'selected' : ''}>Eating Out & Entertainment</option>
+                            <option value="(OTHER) Food, Transport, Groceries, etc." ${value === "(OTHER) Food, Transport, Groceries, etc." ? 'selected' : ''}>(OTHER) Food, Transport, Groceries, etc.</option>
+                        </select>
+                    `;
+                } else {
+                    inputHtml = `<input type="text" class="editable-input" value="${value || ''}" style="width: 100%; padding: 8px;">`;
+                }
+                
+                content.innerHTML = inputHtml;
+                
+                modal.classList.add('show');
+                document.querySelector('.edit-overlay').classList.add('show');
+                
+                const input = content.querySelector('input, select');
+                if (input) {
+                    input.focus();
+                    if (input.tagName === 'INPUT') {
+                        input.setSelectionRange(0, input.value.length);
+                    }
+                }
+            }
+        };
+
+        /* Close modals */
+        window.closeEditModal = function() {
+            document.querySelector('.edit-modal').classList.remove('show');
+            document.querySelector('.edit-overlay').classList.remove('show');
+        };
+
+        window.closeTransactionReview = function() {
+            const modal = document.querySelector('.edit-modal.show');
+            if (modal) modal.remove();
+            document.querySelector('.edit-overlay').classList.remove('show');
+        };
+
+        window.closePendingTransactions = function() {
+            const modal = document.querySelector('.edit-modal.show');
+            if (modal) modal.remove();
+            document.querySelector('.edit-overlay').classList.remove('show');
+        };
+
+        /* Save edit */
+        window.saveEdit = function() {
+            const modal = document.querySelector('.edit-modal');
+            const input = modal.querySelector('.editable-input, .editable-select');
+            
+            if (input && ModalManager.currentField && window.transactions[window.currentTransactionIndex]) {
+                window.transactions[window.currentTransactionIndex][ModalManager.currentField] = input.value;
+                displayEditableFields(window.transactions[window.currentTransactionIndex]);
+            }
+            
+            closeEditModal();
+        };
+
+        /* Submit online */
+        async function submitOnline() {
+            await submitTransaction();
+            closeTransactionReview();
+        }
+
+        /* Submit pending transaction */
+        async function submitPendingTransaction(id) {
+            try {
+                showLoading();
+                const pending = OfflineStorage.getPendingTransactions();
+                const transaction = pending.find(t => t.id === id);
+                
+                if (!transaction) {
+                    throw new Error('Transaction not found');
+                }
+
+                window.transactions = [transaction];
+                window.currentTransactionIndex = 0;
+                
+                await submitTransaction();
+                OfflineStorage.removePendingTransaction(id);
+                
+                const remaining = OfflineStorage.getPendingTransactions();
+                closePendingTransactions();
+                if (remaining.length > 0) {
+                    showPendingTransactions();
+                }
+            } catch (error) {
+                console.error('Submit pending transaction error:', error);
+                showError('Submit Error', 'Failed to submit transaction. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        /* Submit all pending transactions */
+        async function submitAllPending() {
+            try {
+                showLoading();
+                const pending = OfflineStorage.getPendingTransactions();
+                let successCount = 0;
+                
+                for (const transaction of pending) {
+                    try {
+                        window.transactions = [transaction];
+                        window.currentTransactionIndex = 0;
+                        await submitTransaction();
+                        OfflineStorage.removePendingTransaction(transaction.id);
+                        successCount++;
+                    } catch (error) {
+                        console.error('Failed to submit transaction:', error);
+                    }
+                }
+                
+                closePendingTransactions();
+                if (successCount > 0) {
+                    showSuccess(`Successfully submitted ${successCount} transaction${successCount > 1 ? 's' : ''}`);
+                }
+                
+                const remaining = OfflineStorage.getPendingTransactions();
+                if (remaining.length > 0) {
+                    showPendingTransactions();
+                }
+            } catch (error) {
+                console.error('Submit all pending error:', error);
+                showError('Submit Error', 'Failed to submit all transactions. Some may need to be retried.');
+            } finally {
+                hideLoading();
             }
         }
     </script>
