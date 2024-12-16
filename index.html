@@ -745,32 +745,110 @@
             const maxRetries = 3;
             try {
                 await new Promise((resolve, reject) => {
-                    gapi.load('client:auth2', async () => {
+                    gapi.load('client', async () => {
                         try {
                             await gapi.client.init({
                                 apiKey: window.APP_CONFIG.apiKey,
-                                clientId: window.APP_CONFIG.clientId,
-                                scope: window.APP_CONFIG.scope,
                                 discoveryDocs: window.APP_CONFIG.discoveryDocs
                             });
+
+                            /* Initialize Google Identity Services */
+                            google.accounts.id.initialize({
+                                client_id: window.APP_CONFIG.clientId,
+                                callback: handleCredentialResponse,
+                                auto_select: false,
+                                cancel_on_tap_outside: true
+                            });
+
                             resolve();
                         } catch (error) {
                             console.info('Google API client initialization error:', error);
-                            resolve(); /* Resolve to continue execution  */
+                            reject(error);
                         }
                     });
                 });
                 console.log('Google API initialized successfully');
+                return true;
             } catch (error) {
                 console.info('Google API loading error:', error);
                 if (retryCount < maxRetries) {
                     console.info(`Retrying Google API initialization (${retryCount + 1}/${maxRetries})...`);
-                    await loadConfiguration(); /* Re-prompt for credentials  */
-                    await initializeGoogleApi(retryCount + 1); /* Retry initialization  */
+                    await loadConfiguration();
+                    return await initializeGoogleApi(retryCount + 1);
                 } else {
                     console.info('Max retries reached. Switching to offline mode.');
                     showError('Initialization Error', 'Failed to initialize Google API after multiple attempts. Running in offline mode.');
+                    return false;
                 }
+            }
+        }
+
+        let currentAccessToken = null;
+
+        /* Handle credential response from Google Identity Services */
+        async function handleCredentialResponse(response) {
+            try {
+                if (!response.credential) {
+                    throw new Error('No credential received');
+                }
+
+                /* Get access token using credential */
+                const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        client_id: window.APP_CONFIG.clientId,
+                        credential: response.credential,
+                        scope: window.APP_CONFIG.scope,
+                        grant_type: 'authorization_code'
+                    })
+                });
+
+                const tokenData = await tokenResponse.json();
+                if (tokenData.access_token) {
+                    currentAccessToken = tokenData.access_token;
+                    gapi.client.setToken({
+                        access_token: currentAccessToken
+                    });
+                    showSuccess('Successfully signed in');
+                    return true;
+                } else {
+                    throw new Error('Failed to get access token');
+                }
+            } catch (error) {
+                console.error('Credential handling error:', error);
+                showError('Authentication Error', 'Failed to process sign-in. Please try again.');
+                return false;
+            }
+        }
+
+        /* Handle sign-in */
+        async function handleSignIn() {
+            try {
+                showLoading();
+                return new Promise((resolve) => {
+                    google.accounts.id.prompt((notification) => {
+                        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                            showError('Authentication Error', 'Sign-in prompt could not be displayed. Please try again.');
+                            resolve(false);
+                        } else {
+                            /* The resolve will be handled by handleCredentialResponse */
+                            setTimeout(() => {
+                                if (!currentAccessToken) {
+                                    resolve(false);
+                                }
+                            }, 1000);
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error('Sign-in error:', error);
+                showError('Authentication Error', 'Failed to sign in. Please try again.');
+                return false;
+            } finally {
+                hideLoading();
             }
         }
 
@@ -822,8 +900,11 @@
                     }
                 }
 
-                if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-                    await gapi.auth2.getAuthInstance().signIn();
+                if (!currentAccessToken) {
+                    const signedIn = await handleSignIn();
+                    if (!signedIn) {
+                        throw new Error('User not signed in');
+                    }
                 }
 
                 for (const transaction of transactions) {
@@ -851,12 +932,15 @@
                 clearForm();
             } catch (error) {
                 console.info('Submit Error:', error);
-                showError('Submit Error', 'Failed to submit transaction. Saving offline.');
-                
-                for (const transaction of transactions) {
-                    OfflineStorage.savePendingTransaction(transaction);
+                if (error.message === 'User not signed in') {
+                    showError('Authentication Required', 'Please sign in to submit transactions.');
+                } else {
+                    showError('Submit Error', 'Failed to submit transaction. Saving offline.');
+                    for (const transaction of transactions) {
+                        OfflineStorage.savePendingTransaction(transaction);
+                    }
+                    updatePendingBadge();
                 }
-                updatePendingBadge();
             } finally {
                 hideLoading();
             }
