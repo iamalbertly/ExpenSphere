@@ -92,11 +92,21 @@
         async function handleSignIn() {
             try {
                 showLoading();
+                
+                /* Check if we need to initialize Google API */
+                if (!window.gapi || !window.gapi.client || !window.tokenClient) {
+                    console.log('APIs not initialized, attempting initialization...');
+                    await initializeGoogleApi();
+                }
+
                 if (!window.tokenClient) {
                     throw new Error('Token client not initialized');
                 }
 
                 return new Promise((resolve) => {
+                    let isResolved = false;
+
+                    /* Request access token */
                     window.tokenClient.requestAccessToken({
                         prompt: 'consent'
                     });
@@ -105,14 +115,18 @@
                     const checkToken = setInterval(() => {
                         if (currentAccessToken) {
                             clearInterval(checkToken);
-                            resolve(true);
+                            if (!isResolved) {
+                                isResolved = true;
+                                resolve(true);
+                            }
                         }
                     }, 100);
 
                     /* Timeout after 1 minute */
                     setTimeout(() => {
                         clearInterval(checkToken);
-                        if (!currentAccessToken) {
+                        if (!isResolved) {
+                            isResolved = true;
                             resolve(false);
                         }
                     }, 60000);
@@ -136,15 +150,17 @@
             try {
                 showLoading();
                 
+                /* Check if we need to initialize Google API */
                 if (!gapi.client) {
+                    console.log('Client not initialized, attempting initialization...');
                     const initialized = await initializeGoogleApi();
                     if (!initialized) {
-                        console.info('Google API not initialized, proceeding in offline mode.');
                         throw new Error('Failed to initialize Google API');
                     }
                 }
 
                 if (!currentAccessToken) {
+                    console.log('Not signed in, attempting sign in...');
                     const signedIn = await handleSignIn();
                     if (!signedIn) {
                         throw new Error('User not signed in');
@@ -318,8 +334,21 @@
         }
 
         /* Initialize application */
+        let isInitializing = false;
+        let isInitialized = false;
+
         async function initializeApp() {
+            if (isInitializing) {
+                console.log('Already initializing, skipping duplicate call');
+                return;
+            }
+            if (isInitialized) {
+                console.log('Already initialized, skipping duplicate call');
+                return;
+            }
+
             try {
+                isInitializing = true;
                 console.log('Initializing app...');
                 
                 /* Initialize core objects */
@@ -331,7 +360,7 @@
 
                 /* Initialize UI elements */
                 const inputTextArea = document.querySelector('#inputText');
-                if (!inputTextArea) throw new Error('Input textarea not found');
+                if (!inputTextArea) throw new Error('Input element not found');
 
                 /* Add character counter */
                 const charCounter = document.createElement('div');
@@ -365,7 +394,7 @@
                     showError('API Error', 'Failed to initialize Google APIs. Running in offline mode.');
                 }
                 
-                /* Focus on textarea */
+                /* Focus on input */
                 inputTextArea.focus();
 
                 /* Update UI state */
@@ -373,17 +402,26 @@
 
                 console.log('App initialization completed');
                 showSuccess('Ready to track expenses!');
+                isInitialized = true;
             } catch (error) {
                 console.error('Initialization Error:', error);
                 showInitializationError(error.message);
+            } finally {
+                isInitializing = false;
             }
         }
 
         /* Bootstrap application */
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => initializeApp());
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!isInitialized && !isInitializing) {
+                    initializeApp();
+                }
+            });
         } else {
-            initializeApp();
+            if (!isInitialized && !isInitializing) {
+                initializeApp();
+            }
         }
 
         function showInitializationError(message) {
