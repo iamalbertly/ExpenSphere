@@ -13,26 +13,24 @@
         /* Dynamically load Google APIs */
         function loadGoogleAPIs() {
             return new Promise((resolve, reject) => {
-                /* Load Google Identity Services */
-                const gisScript = document.createElement('script');
-                gisScript.src = 'https://accounts.google.com/gsi/client';
-                gisScript.async = true;
-                gisScript.defer = true;
-                gisScript.onload = () => {
-                    /* Load Google API Client */
-                    const apiScript = document.createElement('script');
-                    apiScript.src = 'https://apis.google.com/js/api.js';
-                    apiScript.onload = () => {
-                        /* Initialize GAPI after loading */
-                        gapi.load('client', () => {
-                            resolve();
-                        });
-                    };
-                    apiScript.onerror = reject;
-                    document.head.appendChild(apiScript);
+                /* Load Google API Client first */
+                const apiScript = document.createElement('script');
+                apiScript.src = 'https://apis.google.com/js/api.js';
+                apiScript.onload = () => {
+                    /* After API client loads, initialize it */
+                    gapi.load('client', () => {
+                        /* Then load Google Identity Services */
+                        const gisScript = document.createElement('script');
+                        gisScript.src = 'https://accounts.google.com/gsi/client';
+                        gisScript.async = true;
+                        gisScript.defer = true;
+                        gisScript.onload = () => resolve();
+                        gisScript.onerror = reject;
+                        document.head.appendChild(gisScript);
+                    });
                 };
-                gisScript.onerror = reject;
-                document.head.appendChild(gisScript);
+                apiScript.onerror = reject;
+                document.head.appendChild(apiScript);
             });
         }
 
@@ -40,10 +38,18 @@
         async function initializeGoogleApi(retryCount = 0) {
             const maxRetries = 3;
             try {
+                if (!window.gapi || !window.gapi.client) {
+                    throw new Error('Google API client not loaded');
+                }
+
                 await gapi.client.init({
                     apiKey: window.APP_CONFIG.apiKey,
                     discoveryDocs: window.APP_CONFIG.discoveryDocs
                 });
+
+                if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+                    throw new Error('Google Identity Services not loaded');
+                }
 
                 /* Initialize Google Identity Services */
                 const tokenClient = google.accounts.oauth2.initTokenClient({
@@ -70,7 +76,7 @@
                 console.info('Google API loading error:', error);
                 if (retryCount < maxRetries) {
                     console.info(`Retrying Google API initialization (${retryCount + 1}/${maxRetries})...`);
-                    await loadConfiguration();
+                    await new Promise(resolve => setTimeout(resolve, 1000)); /* Add delay between retries */
                     return await initializeGoogleApi(retryCount + 1);
                 } else {
                     console.info('Max retries reached. Switching to offline mode.');
@@ -344,10 +350,20 @@
                     debounceTimeout = setTimeout(() => processInput(), 300);
                 });
 
-                /* Load configuration and APIs */
+                /* Load configuration first */
                 await loadConfiguration();
-                await loadGoogleAPIs();
-                await initializeGoogleApi();
+                console.log('Configuration loaded');
+
+                /* Then load Google APIs */
+                try {
+                    await loadGoogleAPIs();
+                    console.log('Google APIs loaded');
+                    await initializeGoogleApi();
+                    console.log('Google APIs initialized');
+                } catch (error) {
+                    console.error('Failed to initialize Google APIs:', error);
+                    showError('API Error', 'Failed to initialize Google APIs. Running in offline mode.');
+                }
                 
                 /* Focus on textarea */
                 inputTextArea.focus();
@@ -359,7 +375,7 @@
                 showSuccess('Ready to track expenses!');
             } catch (error) {
                 console.error('Initialization Error:', error);
-                throw error;
+                showInitializationError(error.message);
             }
         }
 
@@ -1167,18 +1183,29 @@
             position: relative;
         }
 
-        .input-wrapper textarea {
+        .input-wrapper input[type="text"] {
             width: 100%;
             padding: 12px;
             background: var(--bg-input);
             color: var(--text-light);
             border: none;
             border-radius: 8px;
-            resize: none;
             font-size: 16px;
             line-height: 1.4;
             margin-bottom: 8px;
-            max-height: 80px; /* Limit textarea height on mobile */
+            height: 48px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        .input-wrapper input[type="text"]:focus {
+            outline: 1px solid var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(245, 166, 35, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .input-wrapper input[type="text"]::placeholder {
+            color: var(--text-muted);
         }
 
         .action-buttons {
@@ -2163,23 +2190,29 @@
             margin-bottom: 8px;
         }
 
-        .input-wrapper textarea {
+        .input-wrapper input[type="text"] {
             width: 100%;
             padding: 12px;
             background: var(--bg-input);
             color: var(--text-light);
-            border: 2px solid transparent;
+            border: none;
             border-radius: 8px;
-            resize: none;
             font-size: 16px;
             line-height: 1.4;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            margin-bottom: 8px;
+            height: 48px;
+            font-family: inherit;
+            transition: all 0.2s ease;
         }
 
-        .input-wrapper textarea:focus {
-            border-color: var(--primary-color);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.2);
+        .input-wrapper input[type="text"]:focus {
+            outline: 1px solid var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(245, 166, 35, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .input-wrapper input[type="text"]::placeholder {
+            color: var(--text-muted);
         }
 
         .input-wrapper .character-count {
@@ -2331,7 +2364,7 @@
         }
 
         /* Keyboard Navigation */
-        .input-wrapper textarea:focus + .character-count {
+        .input-wrapper input[type="text"]:focus + .character-count {
             color: var(--primary-color);
         }
 
@@ -2375,11 +2408,11 @@
         }
 
         /* Input Focus States */
-        .input-wrapper textarea {
+        .input-wrapper input[type="text"] {
             transition: all 0.2s ease;
         }
 
-        .input-wrapper textarea:focus {
+        .input-wrapper input[type="text"]:focus {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
@@ -2493,7 +2526,7 @@
                 margin-bottom: 8px;
             }
 
-            .input-wrapper textarea {
+            .input-wrapper input[type="text"] {
                 max-height: 80px;
                 padding: 10px;
                 font-size: 16px; /* Prevent zoom on iOS */
@@ -2662,9 +2695,9 @@
         </div>
         <div class="input-section">
             <div class="input-wrapper">
-                <textarea id="inputText" autofocus
+                <input type="text" id="inputText" autofocus
                     placeholder="Type expense (e.g., 'gave irene 50k for home')"
-                    rows="2"></textarea>
+                    style="width: 100%; padding: 12px; background: var(--bg-input); color: var(--text-light); border: none; border-radius: 8px; font-size: 16px; line-height: 1.4; margin-bottom: 8px; height: 48px;">
             </div>
             <div class="action-buttons">
                 <button class="primary-button" onclick="submitTransaction()">
