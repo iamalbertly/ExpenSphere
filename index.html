@@ -60,11 +60,13 @@
                             currentAccessToken = tokenResponse.access_token;
                             gapi.client.setToken(tokenResponse);
                             showSuccess('Successfully signed in');
+                            hideLoading();
                         }
                     },
                     error_callback: (error) => {
                         console.error('Token client error:', error);
                         showError('Authentication Error', 'Failed to initialize token client');
+                        hideLoading();
                     }
                 });
 
@@ -73,14 +75,15 @@
                 console.log('Google API initialized successfully');
                 return true;
             } catch (error) {
-                console.info('Google API loading error:', error);
+                console.error('Google API loading error:', error);
                 if (retryCount < maxRetries) {
                     console.info(`Retrying Google API initialization (${retryCount + 1}/${maxRetries})...`);
                     await new Promise(resolve => setTimeout(resolve, 1000)); /* Add delay between retries */
                     return await initializeGoogleApi(retryCount + 1);
                 } else {
-                    console.info('Max retries reached. Switching to offline mode.');
+                    console.error('Max retries reached. Switching to offline mode.');
                     showError('Initialization Error', 'Failed to initialize Google API after multiple attempts. Running in offline mode.');
+                    hideLoading();
                     return false;
                 }
             }
@@ -96,7 +99,10 @@
                 /* Check if we need to initialize Google API */
                 if (!window.gapi || !window.gapi.client || !window.tokenClient) {
                     console.log('APIs not initialized, attempting initialization...');
-                    await initializeGoogleApi();
+                    const initialized = await initializeGoogleApi();
+                    if (!initialized) {
+                        throw new Error('Failed to initialize Google API');
+                    }
                 }
 
                 if (!window.tokenClient) {
@@ -108,25 +114,33 @@
 
                     /* Request access token */
                     window.tokenClient.requestAccessToken({
-                        prompt: 'consent'
-                    });
-
-                    /* Check for token periodically */
-                    const checkToken = setInterval(() => {
-                        if (currentAccessToken) {
-                            clearInterval(checkToken);
+                        prompt: 'consent',
+                        callback: (tokenResponse) => {
+                            if (tokenResponse && tokenResponse.access_token) {
+                                if (!isResolved) {
+                                    isResolved = true;
+                                    resolve(true);
+                                }
+                            } else {
+                                if (!isResolved) {
+                                    isResolved = true;
+                                    resolve(false);
+                                }
+                            }
+                        },
+                        error_callback: () => {
                             if (!isResolved) {
                                 isResolved = true;
-                                resolve(true);
+                                resolve(false);
                             }
                         }
-                    }, 100);
+                    });
 
                     /* Timeout after 1 minute */
                     setTimeout(() => {
-                        clearInterval(checkToken);
                         if (!isResolved) {
                             isResolved = true;
+                            hideLoading();
                             resolve(false);
                         }
                     }, 60000);
@@ -191,7 +205,7 @@
                 showSuccess('Transaction submitted successfully');
                 clearForm();
             } catch (error) {
-                console.info('Submit Error:', error);
+                console.error('Submit Error:', error);
                 if (error.message === 'User not signed in') {
                     showError('Authentication Required', 'Please sign in to submit transactions.');
                 } else {
@@ -349,6 +363,7 @@
 
             try {
                 isInitializing = true;
+                showLoading();
                 console.log('Initializing app...');
                 
                 /* Initialize core objects */
@@ -408,6 +423,7 @@
                 showInitializationError(error.message);
             } finally {
                 isInitializing = false;
+                hideLoading();
             }
         }
 
