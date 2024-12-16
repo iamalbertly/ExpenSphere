@@ -10,153 +10,395 @@
 
     <!-- Load Google APIs -->
     <script>
+        /* Remove source map references */
+        /* Remove these lines: */
+        /* //# sourceURL=expensphere.js */
+        /* //# sourceMappingURL=expensphere.js.map */
+
         /* Dynamically load Google APIs */
-        function loadGoogleAPIs() {
+        function loadGoogleAPIs(retryCount = 0) {
+            const MAX_RETRIES = 3;
+            const TIMEOUT_DURATION = 30000; /* 30 seconds timeout */
+            const RETRY_DELAY = 3000; /* 3 seconds between retries */
+
             return new Promise((resolve, reject) => {
-                /* Load Google API Client first */
-                const apiScript = document.createElement('script');
-                apiScript.src = 'https://apis.google.com/js/api.js';
-                apiScript.onload = () => {
-                    /* After API client loads, initialize it */
-                    gapi.load('client', () => {
-                        /* Then load Google Identity Services */
-                        const gisScript = document.createElement('script');
-                        gisScript.src = 'https://accounts.google.com/gsi/client';
-                        gisScript.async = true;
-                        gisScript.defer = true;
-                        gisScript.onload = () => resolve();
-                        gisScript.onerror = reject;
-                        document.head.appendChild(gisScript);
+                let timeoutId;
+
+                /* Function to handle timeout */
+                const handleTimeout = () => {
+                    clearTimeout(timeoutId);
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Attempt ${retryCount + 1} timed out, retrying in ${RETRY_DELAY/1000} seconds...`);
+                        setTimeout(() => {
+                            loadGoogleAPIs(retryCount + 1)
+                                .then(resolve)
+                                .catch(reject);
+                        }, RETRY_DELAY);
+                    } else {
+                        const error = new Error(`Loading Google APIs failed after ${MAX_RETRIES + 1} attempts`);
+                        console.error(error);
+                        showError('Loading Error', 'Failed to load Google APIs. Please check your internet connection and refresh the page.');
+                        reject(error);
+                    }
+                };
+
+                /* Function to load GAPI script */
+                const loadGapiScript = () => {
+                    return new Promise((resolveGapi, rejectGapi) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://apis.google.com/js/api.js';
+                        script.async = true;
+                        script.defer = true;
+                        
+                        script.onload = () => {
+                            console.log('GAPI script loaded');
+                            resolveGapi();
+                        };
+                        
+                        script.onerror = (error) => {
+                            console.error('Failed to load GAPI script:', error);
+                            rejectGapi(new Error('Failed to load GAPI script'));
+                        };
+
+                        document.head.appendChild(script);
                     });
                 };
-                apiScript.onerror = reject;
-                document.head.appendChild(apiScript);
+
+                /* Function to load GIS script */
+                const loadGisScript = () => {
+                    return new Promise((resolveGis, rejectGis) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://accounts.google.com/gsi/client';
+                        script.async = true;
+                        script.defer = true;
+                        
+                        script.onload = () => {
+                            console.log('GIS script loaded');
+                            resolveGis();
+                        };
+                        
+                        script.onerror = (error) => {
+                            console.error('Failed to load GIS script:', error);
+                            rejectGis(new Error('Failed to load GIS script'));
+                        };
+
+                        document.head.appendChild(script);
+                    });
+                };
+
+                /* Function to initialize GAPI client */
+                const initializeGapiClient = () => {
+                    return new Promise((resolveInit, rejectInit) => {
+                        gapi.load('client', async () => {
+                            try {
+                                console.log('Initializing GAPI client...');
+                                await gapi.client.init({
+                                    apiKey: window.APP_CONFIG.apiKey,
+                                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                                });
+                                console.log('GAPI client initialized');
+                                resolveInit();
+                            } catch (error) {
+                                console.error('Failed to initialize GAPI client:', error);
+                                rejectInit(error);
+                            }
+                        });
+                    });
+                };
+
+                /* Set timeout for entire operation */
+                timeoutId = setTimeout(handleTimeout, TIMEOUT_DURATION);
+
+                /* Execute loading sequence */
+                (async () => {
+                    try {
+                        /* Remove any existing scripts first */
+                        const existingGapi = document.querySelector('script[src*="apis.google.com/js/api.js"]');
+                        const existingGis = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+                        if (existingGapi) existingGapi.remove();
+                        if (existingGis) existingGis.remove();
+
+                        /* Load both scripts in parallel */
+                        await Promise.all([loadGapiScript(), loadGisScript()]);
+                        
+                        /* Initialize GAPI client */
+                        await initializeGapiClient();
+                        
+                        /* Initialize GIS client */
+                        await initGIS();
+
+                        clearTimeout(timeoutId);
+                        console.log('All Google APIs initialized successfully');
+                        resolve();
+                    } catch (error) {
+                        clearTimeout(timeoutId);
+                        console.error('Failed to load Google APIs:', error);
+                        handleTimeout();
+                    }
+                })();
             });
         }
 
-        /* Initialize Google API with retry limit */
-        async function initializeGoogleApi(retryCount = 0) {
-            const maxRetries = 3;
-            try {
-                if (!window.gapi || !window.gapi.client) {
-                    throw new Error('Google API client not loaded');
-                }
-
-                await gapi.client.init({
-                    apiKey: window.APP_CONFIG.apiKey,
-                    discoveryDocs: window.APP_CONFIG.discoveryDocs
-                });
-
-                if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-                    throw new Error('Google Identity Services not loaded');
-                }
-
-                /* Initialize Google Identity Services */
-                const tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: window.APP_CONFIG.clientId,
-                    scope: window.APP_CONFIG.scope,
-                    callback: (tokenResponse) => {
-                        if (tokenResponse && tokenResponse.access_token) {
-                            currentAccessToken = tokenResponse.access_token;
-                            gapi.client.setToken(tokenResponse);
-                            showSuccess('Successfully signed in');
-                            hideLoading();
-                        }
-                    },
-                    error_callback: (error) => {
-                        console.error('Token client error:', error);
-                        showError('Authentication Error', 'Failed to initialize token client');
-                        hideLoading();
+        /* Initialize Google Identity Services */
+        function initGIS() {
+            return new Promise((resolve, reject) => {
+                try {
+                    if (!google?.accounts?.oauth2) {
+                        throw new Error('Google Identity Services not loaded');
                     }
-                });
 
-                /* Store token client globally */
-                window.tokenClient = tokenClient;
-                console.log('Google API initialized successfully');
-                return true;
-            } catch (error) {
-                console.error('Google API loading error:', error);
-                if (retryCount < maxRetries) {
-                    console.info(`Retrying Google API initialization (${retryCount + 1}/${maxRetries})...`);
-                    await new Promise(resolve => setTimeout(resolve, 1000)); /* Add delay between retries */
-                    return await initializeGoogleApi(retryCount + 1);
-                } else {
-                    console.error('Max retries reached. Switching to offline mode.');
-                    showError('Initialization Error', 'Failed to initialize Google API after multiple attempts. Running in offline mode.');
-                    hideLoading();
-                    return false;
+                    console.log('Initializing GIS token client...');
+                    window.tokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com',
+                        scope: 'https://www.googleapis.com/auth/spreadsheets',
+                        callback: (tokenResponse) => {
+                            if (tokenResponse?.error) {
+                                console.error('GIS token error:', tokenResponse.error);
+                                reject(new Error(tokenResponse.error));
+                                return;
+                            }
+                            
+                            if (tokenResponse?.access_token) {
+                                gapi.client.setToken(tokenResponse);
+                                console.log('Successfully initialized GIS client');
+                                resolve(tokenResponse);
+                            } else {
+                                reject(new Error('No access token received'));
+                            }
+                        },
+                        error_callback: (error) => {
+                            console.error('GIS initialization error:', error);
+                            reject(error);
+                        }
+                    });
+
+                    /* Initial setup is complete */
+                    console.log('GIS token client initialized');
+                    resolve();
+                } catch (error) {
+                    console.error('Failed to initialize GIS:', error);
+                    reject(error);
                 }
-            }
+            });
         }
-
-        let currentAccessToken = null;
 
         /* Handle sign-in */
         async function handleSignIn() {
             try {
                 showLoading();
                 
-                /* Check if we need to initialize Google API */
-                if (!window.gapi || !window.gapi.client || !window.tokenClient) {
-                    console.log('APIs not initialized, attempting initialization...');
-                    const initialized = await initializeGoogleApi();
-                    if (!initialized) {
-                        throw new Error('Failed to initialize Google API');
-                    }
-                }
-
                 if (!window.tokenClient) {
-                    throw new Error('Token client not initialized');
+                    console.log('Token client not initialized, attempting initialization...');
+                    await loadGoogleAPIs();
                 }
 
                 return new Promise((resolve) => {
-                    let isResolved = false;
+                    try {
+                        if (!google.accounts?.oauth2) {
+                            throw new Error('Google Identity Services not loaded');
+                        }
 
-                    /* Request access token */
-                    window.tokenClient.requestAccessToken({
-                        prompt: 'consent',
-                        callback: (tokenResponse) => {
-                            if (tokenResponse && tokenResponse.access_token) {
-                                if (!isResolved) {
-                                    isResolved = true;
-                                    resolve(true);
+                        /* Set up the callback for this sign-in attempt */
+                        window.tokenClient.callback = (tokenResponse) => {
+                            try {
+                                if (tokenResponse?.error) {
+                                    console.error('Sign-in error:', tokenResponse.error);
+                                    showError('Authentication Error', 'Failed to sign in: ' + tokenResponse.error);
+                                    resolve(false);
+                                    return;
                                 }
-                            } else {
-                                if (!isResolved) {
-                                    isResolved = true;
+
+                                if (tokenResponse?.access_token) {
+                                    gapi.client.setToken(tokenResponse);
+                                    console.log('Successfully signed in');
+                                    resolve(true);
+                                } else {
+                                    console.error('No access token received');
+                                    showError('Authentication Error', 'No access token received');
                                     resolve(false);
                                 }
-                            }
-                        },
-                        error_callback: () => {
-                            if (!isResolved) {
-                                isResolved = true;
+                            } catch (error) {
+                                console.error('Token callback error:', error);
+                                showError('Authentication Error', 'Failed to process authentication response');
                                 resolve(false);
                             }
-                        }
-                    });
+                        };
 
-                    /* Timeout after 1 minute */
-                    setTimeout(() => {
-                        if (!isResolved) {
-                            isResolved = true;
-                            hideLoading();
-                            resolve(false);
-                        }
-                    }, 60000);
+                        /* Request access token with empty prompt for Desktop apps */
+                        window.tokenClient.requestAccessToken({
+                            prompt: ''
+                        });
+                    } catch (error) {
+                        console.error('Request token error:', error);
+                        showError('Authentication Error', 'Failed to request access token');
+                        resolve(false);
+                    }
                 });
             } catch (error) {
                 console.error('Sign-in error:', error);
-                showError('Authentication Error', 'Failed to sign in. Please try again.');
+                showError('Authentication Error', 'Failed to initialize authentication');
                 return false;
             } finally {
                 hideLoading();
             }
         }
 
+        /* Initialize application */
+        let isInitializing = false;
+        let isInitialized = false;
+
+        async function initializeApp() {
+            if (isInitializing || isInitialized) {
+                console.log('Already initializing or initialized, skipping duplicate call');
+                hideLoading();
+                return;
+            }
+
+            try {
+                isInitializing = true;
+                
+                /* Initialize core objects without showing loading yet */
+                window.transactions = [];
+                window.currentTransactionIndex = 0;
+
+                /* Add clear credentials button */
+                addClearCredentialsButton();
+
+                /* Initialize UI elements */
+                const inputTextArea = document.querySelector('#inputText');
+                if (!inputTextArea) throw new Error('Input element not found');
+
+                /* Add character counter */
+                const charCounter = document.createElement('div');
+                charCounter.className = 'character-count';
+                inputTextArea.parentNode.appendChild(charCounter);
+
+                /* Setup event listeners */
+                let debounceTimeout = null;
+                inputTextArea.addEventListener('input', (event) => {
+                    /* Update character count */
+                    const count = event.target.value.length;
+                    charCounter.textContent = `${count} characters`;
+
+                    /* Process input with debounce */
+                    if (debounceTimeout) clearTimeout(debounceTimeout);
+                    debounceTimeout = setTimeout(() => processInput(), 300);
+                });
+
+                /* Load configuration first */
+                const config = await loadConfiguration();
+                if (!config || !config.clientId || !config.apiKey) {
+                    throw new Error('Invalid configuration: Missing required credentials');
+                }
+                console.log('Configuration loaded');
+
+                /* Only show loading when we need to load Google APIs */
+                showLoading();
+                try {
+                    await loadGoogleAPIs();
+                    
+                    /* Check if we have a valid token after API initialization */
+                    const token = gapi.client.getToken();
+                    if (!token) {
+                        console.log('No token available, user needs to authenticate');
+                        showInfo('Authentication Required', 'Please sign in to use Google Sheets functionality');
+                    } else {
+                        /* Verify token by making a test request */
+                        try {
+                            await gapi.client.sheets.spreadsheets.values.get({
+                                spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                                range: 'ExpenseResults!A1'
+                            });
+                            console.log('Successfully verified spreadsheet access');
+                            showSuccess('Connected to Google Sheets');
+                        } catch (error) {
+                            console.error('Token validation error:', error);
+                            if (error.status === 401) {
+                                console.log('Token expired, user needs to re-authenticate');
+                                showInfo('Session Expired', 'Please sign in again to continue');
+                            } else if (error.status === 403) {
+                                showError('Access Error', 'Please verify:\n1. You have Editor access to the spreadsheet\n2. Google Sheets API is enabled\n3. Your account is added as a test user');
+                            } else {
+                                showError('Connection Error', 'Failed to access spreadsheet. Please check your permissions.');
+                            }
+                        }
+                    }
+
+                    console.log('Google Sheets API ready');
+                } catch (error) {
+                    console.error('Failed to initialize Google Sheets API:', error);
+                    showError('API Error', 'Failed to initialize Google Sheets API. Please check your internet connection and try again.');
+                    throw error;
+                } finally {
+                    hideLoading();
+                }
+                
+                /* Focus on input */
+                inputTextArea.focus();
+
+                /* Update UI state */
+                updatePendingBadge();
+
+                console.log('App initialization completed');
+                isInitialized = true;
+            } catch (error) {
+                console.error('Initialization Error:', error);
+                showError(error.message);
+                throw error;
+            } finally {
+                isInitializing = false;
+                hideLoading();
+            }
+        }
+
+        /* Show initialization error */
+        function showInitializationError(message) {
+            showError('Initialization Error', message);
+        }
+
+        /* Show info notification */
+        function showInfo(title, message) {
+            const existingNotification = document.querySelector('.info-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'info-notification';
+            notification.innerHTML = `
+                <div class="info-title">${title}</div>
+                <div class="info-message">${message}</div>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        /* Show warning notification */
+        function showWarning(title, message) {
+            const existingNotification = document.querySelector('.warning-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'warning-notification';
+            notification.innerHTML = `
+                <div class="warning-title">${title}</div>
+                <div class="warning-message">${message}</div>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
         /* Submit transaction to Google Sheets */
         async function submitTransaction() {
-            if (transactions.length === 0) {
+            if (!window.transactions || window.transactions.length === 0) {
                 showError("No Transaction", "Please enter a transaction first.");
                 return;
             }
@@ -164,56 +406,147 @@
             try {
                 showLoading();
                 
-                /* Check if we need to initialize Google API */
-                if (!gapi.client) {
-                    console.log('Client not initialized, attempting initialization...');
-                    const initialized = await initializeGoogleApi();
-                    if (!initialized) {
-                        throw new Error('Failed to initialize Google API');
+                /* Verify APP_CONFIG */
+                if (!window.APP_CONFIG?.clientId || !window.APP_CONFIG?.apiKey) {
+                    throw new Error('config_error');
+                }
+
+                /* Check for valid token */
+                let token = gapi.client.getToken();
+                let needsAuth = true;
+
+                if (token) {
+                    try {
+                        /* Verify token with a test request */
+                        await gapi.client.sheets.spreadsheets.values.get({
+                            spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                            range: 'ExpenseResults!A1'
+                        });
+                        needsAuth = false;
+                    } catch (error) {
+                        console.log('Token validation error:', error);
+                        if (error?.status === 401) {
+                            console.log('Token expired, attempting refresh...');
+                            const signedIn = await handleSignIn().catch(e => {
+                                console.error('Sign in failed:', e);
+                                return false;
+                            });
+                            if (signedIn) {
+                                token = gapi.client.getToken();
+                                needsAuth = !token;
+                            }
+                        }
                     }
                 }
 
-                if (!currentAccessToken) {
-                    console.log('Not signed in, attempting sign in...');
-                    const signedIn = await handleSignIn();
+                /* If we still need authentication */
+                if (needsAuth) {
+                    console.log('No valid token, attempting sign in...');
+                    const signedIn = await handleSignIn().catch(() => false);
                     if (!signedIn) {
-                        throw new Error('User not signed in');
+                        throw new Error('auth_required');
+                    }
+                    token = gapi.client.getToken();
+                    if (!token) {
+                        throw new Error('token_error');
                     }
                 }
 
-                for (const transaction of transactions) {
-                    const values = [
-                        [
-                            transaction["Date of Transaction"],
-                            transaction["Where did the money come from?"],
-                            transaction["How much money? (Tsh)"],
-                            transaction["What's the Purchase Category"],
-                            transaction["Purchase Description"],
-                            transaction["Where was the money payed to?"],
-                            transaction["Confidence level"]
-                        ]
-                    ];
+                /* Submit transactions */
+                let submittedCount = 0;
+                const errors = [];
 
-                    await gapi.client.sheets.spreadsheets.values.append({
-                        spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
-                        range: 'ExpenseResults!A:G',
-                        valueInputOption: 'USER_ENTERED',
-                        resource: { values }
-                    });
+                for (const transaction of window.transactions) {
+                    try {
+                        const values = [
+                            [
+                                transaction["Date of Transaction"] || '',
+                                transaction["Where did the money come from?"] || '',
+                                transaction["How much money? (Tsh)"] || '0',
+                                transaction["What's the Purchase Category"] || '',
+                                transaction["Purchase Description"] || '',
+                                transaction["Where was the money payed to?"] || '',
+                                transaction["Confidence level"] || ''
+                            ]
+                        ];
+
+                        await gapi.client.sheets.spreadsheets.values.append({
+                            spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
+                            range: 'ExpenseResults!A:G',
+                            valueInputOption: 'USER_ENTERED',
+                            resource: { values }
+                        });
+                        submittedCount++;
+                    } catch (error) {
+                        console.error('Failed to submit transaction:', error);
+                        errors.push(error);
+                    }
                 }
-                
-                showSuccess('Transaction submitted successfully');
-                clearForm();
-            } catch (error) {
-                console.error('Submit Error:', error);
-                if (error.message === 'User not signed in') {
-                    showError('Authentication Required', 'Please sign in to submit transactions.');
-                } else {
-                    showError('Submit Error', 'Failed to submit transaction. Saving offline.');
-                    for (const transaction of transactions) {
-                        OfflineStorage.savePendingTransaction(transaction);
+
+                /* Handle partial or complete success/failure */
+                if (submittedCount === window.transactions.length) {
+                    showSuccess('All transactions submitted successfully');
+                    clearForm();
+                } else if (submittedCount > 0) {
+                    showWarning('Partial Success', `${submittedCount} out of ${window.transactions.length} transactions submitted. Saving remaining offline.`);
+                    /* Save failed transactions offline */
+                    for (let i = submittedCount; i < window.transactions.length; i++) {
+                        try {
+                            OfflineStorage.savePendingTransaction(window.transactions[i]);
+                        } catch (error) {
+                            console.error('Failed to save transaction offline:', error);
+                        }
                     }
                     updatePendingBadge();
+                    clearForm();
+                } else {
+                    throw new Error('submit_failed');
+                }
+            } catch (error) {
+                console.error('Submit Error:', error);
+                
+                /* Handle specific error cases */
+                switch(error.message) {
+                    case 'config_error':
+                        showError('Configuration Error', 'Invalid application configuration. Please refresh the page and try again.');
+                        break;
+                    case 'auth_required':
+                        showError('Authentication Required', 'Please sign in to submit transactions.');
+                        break;
+                    case 'token_error':
+                        showError('Authentication Error', 'Failed to obtain access token. Please try signing in again.');
+                        break;
+                    case 'submit_failed':
+                        showError('Submit Error', 'Failed to submit transactions. Saving all offline.');
+                        for (const transaction of window.transactions) {
+                            try {
+                                OfflineStorage.savePendingTransaction(transaction);
+                            } catch (saveError) {
+                                console.error('Failed to save transaction offline:', saveError);
+                            }
+                        }
+                        updatePendingBadge();
+                        break;
+                    default: {
+                        const status = error?.status;
+                        if (status === 403) {
+                            showError('Access Denied', 'You don\'t have permission to modify this spreadsheet.');
+                        } else if (status === 404) {
+                            showError('Spreadsheet Not Found', 'The target spreadsheet could not be found.');
+                        } else if (status === 429) {
+                            showError('Rate Limit Exceeded', 'Too many requests. Please try again later.');
+                        } else {
+                            showError('Submit Error', 'An unexpected error occurred. Saving offline.');
+                            for (const transaction of window.transactions) {
+                                try {
+                                    OfflineStorage.savePendingTransaction(transaction);
+                                } catch (saveError) {
+                                    console.error('Failed to save transaction offline:', saveError);
+                                }
+                            }
+                            updatePendingBadge();
+                        }
+                    }
                 }
             } finally {
                 hideLoading();
@@ -231,23 +564,10 @@
                     return window.APP_CONFIG;
                 }
 
-                /* If no stored config, prompt for credentials  */
-                const clientId = await promptForCredential(
-                    'Google Client ID', 
-                    'Enter your Google OAuth Client ID',
-                    'Should look like: xxxxxx.apps.googleusercontent.com'
-                );
-
-                const apiKey = await promptForCredential(
-                    'Google API Key', 
-                    'Enter your Google API Key',
-                    'Should look like: AIzaSyXXXXXXXXXXXXXXXXXXXXXX'
-                );
-
-                /* Create and save configuration  */
+                /* Create and save configuration with Desktop app credentials */
                 window.APP_CONFIG = {
-                    clientId: clientId,
-                    apiKey: apiKey,
+                    clientId: '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com',
+                    apiKey: 'AIzaSyAh3L8v1pO6i6_2sJ0gPUnAE___jvPL0lU',
                     scope: 'https://www.googleapis.com/auth/spreadsheets',
                     discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
                 };
@@ -261,58 +581,6 @@
                 console.error('Configuration error:', error);
                 throw new Error('Failed to load configuration: ' + error.message);
             }
-        }
-
-        /* Prompt for credential */
-        function promptForCredential(title, message, hint) {
-            return new Promise((resolve, reject) => {
-                /* Create modal for credential input  */
-                const modal = document.createElement('div');
-                modal.className = 'edit-modal show';
-                modal.innerHTML = `
-                    <h3>${title}</h3>
-                    <div class="edit-modal-content">
-                        <p style="margin-bottom: 10px;">${message}</p>
-                        <input type="text" 
-                               class="credential-input" 
-                               placeholder="${hint}"
-                               style="width: 100%; padding: 8px; margin-bottom: 5px;">
-                        <small style="color: var(--text-muted);">${hint}</small>
-                    </div>
-                    <div class="edit-modal-buttons">
-                        <button class="submit-credential">Submit</button>
-                    </div>
-                `;
-
-                /* Show overlay  */
-                const overlay = document.createElement('div');
-                overlay.className = 'edit-overlay show';
-                document.body.appendChild(overlay);
-                document.body.appendChild(modal);
-
-                /* Handle submission  */
-                const input = modal.querySelector('.credential-input');
-                const submitBtn = modal.querySelector('.submit-credential');
-
-                const handleSubmit = () => {
-                    const value = input.value.trim();
-                    if (!value) {
-                        showError('Invalid Input', 'Please enter a valid credential');
-                        return;
-                    }
-                    modal.remove();
-                    overlay.remove();
-                    resolve(value);
-                };
-
-                submitBtn.addEventListener('click', handleSubmit);
-                input.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') handleSubmit();
-                });
-
-                /* Focus input  */
-                input.focus();
-            });
         }
 
         /* Clear stored credentials */
@@ -345,83 +613,6 @@
             `;
 
             container.appendChild(button);
-        }
-
-        /* Initialize application */
-        let isInitializing = false;
-        let isInitialized = false;
-
-        async function initializeApp() {
-            if (isInitializing || isInitialized) {
-                console.log('Already initializing or initialized, skipping duplicate call');
-                hideLoading(); /* Ensure loading is hidden if we're skipping */
-                return;
-            }
-
-            try {
-                isInitializing = true;
-                showLoading();
-                console.log('Initializing app...');
-                
-                /* Initialize core objects */
-                window.transactions = [];
-                window.currentTransactionIndex = 0;
-
-                /* Add clear credentials button */
-                addClearCredentialsButton();
-
-                /* Initialize UI elements */
-                const inputTextArea = document.querySelector('#inputText');
-                if (!inputTextArea) throw new Error('Input element not found');
-
-                /* Add character counter */
-                const charCounter = document.createElement('div');
-                charCounter.className = 'character-count';
-                inputTextArea.parentNode.appendChild(charCounter);
-
-                /* Setup event listeners */
-                let debounceTimeout = null;
-                inputTextArea.addEventListener('input', (event) => {
-                    /* Update character count */
-                    const count = event.target.value.length;
-                    charCounter.textContent = `${count} characters`;
-
-                    /* Process input with debounce */
-                    if (debounceTimeout) clearTimeout(debounceTimeout);
-                    debounceTimeout = setTimeout(() => processInput(), 300);
-                });
-
-                /* Load configuration first */
-                await loadConfiguration();
-                console.log('Configuration loaded');
-
-                /* Then load Google APIs */
-                try {
-                    await loadGoogleAPIs();
-                    console.log('Google APIs loaded');
-                    const initialized = await initializeGoogleApi();
-                    console.log('Google APIs initialized:', initialized ? 'success' : 'offline mode');
-                } catch (error) {
-                    console.error('Failed to initialize Google APIs:', error);
-                    showError('API Error', 'Failed to initialize Google APIs. Running in offline mode.');
-                }
-                
-                /* Focus on input */
-                inputTextArea.focus();
-
-                /* Update UI state */
-                updatePendingBadge();
-
-                console.log('App initialization completed');
-                showSuccess('Ready to track expenses!');
-                isInitialized = true;
-            } catch (error) {
-                console.error('Initialization Error:', error);
-                showInitializationError(error.message);
-            } finally {
-                isInitializing = false;
-                hideLoading();
-            }
         }
 
         /* Save current transaction for later */
@@ -472,28 +663,8 @@
         }
 
         /* Bootstrap application */
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                if (!isInitialized && !isInitializing) {
-                    initializeApp().catch(error => {
-                        console.error('Failed to initialize app:', error);
-                        showInitializationError(error.message);
-                        hideLoading(); /* Ensure loading is hidden on error */
-                    });
-                }
-            });
-        } else {
-            if (!isInitialized && !isInitializing) {
-                initializeApp().catch(error => {
-                    console.error('Failed to initialize app:', error);
-                    showInitializationError(error.message);
-                    hideLoading(); /* Ensure loading is hidden on error */
-                });
-            }
-        }
-
-        window.addEventListener('load', function() {
-            /* Check for required elements */
+        async function bootstrapApp() {
+            /* Check for required elements first without showing loading */
             const requiredElements = [
                 '#inputText',
                 '.error-close',
@@ -511,19 +682,29 @@
             if (missingElements.length > 0) {
                 console.error('Missing required elements:', missingElements);
                 showInitializationError(`Missing required elements: ${missingElements.join(', ')}`);
-                hideLoading(); /* Ensure loading is hidden if elements are missing */
                 return;
             }
 
             /* Initialize if not already done */
             if (!isInitialized && !isInitializing) {
-                initializeApp().catch(error => {
+                try {
+                    await initializeApp();
+                } catch (error) {
                     console.error('Failed to initialize app:', error);
                     showInitializationError(error.message);
-                    hideLoading(); /* Ensure loading is hidden on error */
-                });
+                    hideLoading();
+                }
             }
-        });
+        }
+
+        /* Wait for DOM to be ready */
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootstrapApp);
+        } else {
+            bootstrapApp();
+        }
+
+        /* Remove the window.addEventListener('load') handler since we're using bootstrapApp */
 
         /** Core Functions */
         function processInput() {
@@ -999,7 +1180,7 @@
                         loadingCount = 0;
                         hideLoading();
                     }
-                }, 10000); /* 10 second timeout */
+                }, 100000); /* 10 second timeout */
             }
         }
 
@@ -1149,40 +1330,52 @@
             currentValue: null,
 
             showEditModal(field, value) {
-                this.currentField = field;
-                this.currentValue = value;
-                
-                const modal = document.querySelector('.edit-modal');
-                const content = modal.querySelector('.edit-modal-content');
-                
-                let inputHtml = '';
-                if (field === "What's the Purchase Category") {
-                    inputHtml = `
-                        <select class="editable-select" style="width: 100%; padding: 8px;">
-                            <option value="Groceries & Household" ${value === "Groceries & Household" ? 'selected' : ''}>Groceries & Household</option>
-                            <option value="Gift to Family & Friends" ${value === "Gift to Family & Friends" ? 'selected' : ''}>Gift to Family & Friends</option>
-                            <option value="Petrol & Transport" ${value === "Petrol & Transport" ? 'selected' : ''}>Petrol & Transport</option>
-                            <option value="Medical & Medicine" ${value === "Medical & Medicine" ? 'selected' : ''}>Medical & Medicine</option>
-                            <option value="Utilities & Bills" ${value === "Utilities & Bills" ? 'selected' : ''}>Utilities & Bills</option>
-                            <option value="Eating Out & Entertainment" ${value === "Eating Out & Entertainment" ? 'selected' : ''}>Eating Out & Entertainment</option>
-                            <option value="(OTHER) Food, Transport, Groceries, etc." ${value === "(OTHER) Food, Transport, Groceries, etc." ? 'selected' : ''}>(OTHER) Food, Transport, Groceries, etc.</option>
-                        </select>
-                    `;
-                } else {
-                    inputHtml = `<input type="text" class="editable-input" value="${value || ''}" style="width: 100%; padding: 8px;">`;
-                }
-                
-                content.innerHTML = inputHtml;
-                
-                modal.classList.add('show');
-                document.querySelector('.edit-overlay').classList.add('show');
-                
-                const input = content.querySelector('input, select');
-                if (input) {
-                    input.focus();
-                    if (input.tagName === 'INPUT') {
-                        input.setSelectionRange(0, input.value.length);
+                try {
+                    this.currentField = field;
+                    this.currentValue = value;
+                    
+                    const modal = document.querySelector('.edit-modal');
+                    const content = modal.querySelector('.edit-modal-content');
+                    if (!modal || !content) {
+                        console.error('Modal elements not found');
+                        return;
                     }
+                    
+                    let inputHtml = '';
+                    if (field === "What's the Purchase Category") {
+                        inputHtml = `
+                            <select class="editable-select" style="width: 100%; padding: 8px;">
+                                <option value="Groceries & Household" ${value === "Groceries & Household" ? 'selected' : ''}>Groceries & Household</option>
+                                <option value="Gift to Family & Friends" ${value === "Gift to Family & Friends" ? 'selected' : ''}>Gift to Family & Friends</option>
+                                <option value="Petrol & Transport" ${value === "Petrol & Transport" ? 'selected' : ''}>Petrol & Transport</option>
+                                <option value="Medical & Medicine" ${value === "Medical & Medicine" ? 'selected' : ''}>Medical & Medicine</option>
+                                <option value="Utilities & Bills" ${value === "Utilities & Bills" ? 'selected' : ''}>Utilities & Bills</option>
+                                <option value="Eating Out & Entertainment" ${value === "Eating Out & Entertainment" ? 'selected' : ''}>Eating Out & Entertainment</option>
+                                <option value="(OTHER) Food, Transport, Groceries, etc." ${value === "(OTHER) Food, Transport, Groceries, etc." ? 'selected' : ''}>(OTHER) Food, Transport, Groceries, etc.</option>
+                            </select>
+                        `;
+                    } else {
+                        inputHtml = `<input type="text" class="editable-input" value="${(value || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 8px;">`;
+                    }
+                    
+                    content.innerHTML = inputHtml;
+                    
+                    modal.classList.add('show');
+                    const overlay = document.querySelector('.edit-overlay');
+                    if (overlay) {
+                        overlay.classList.add('show');
+                    }
+                    
+                    const input = content.querySelector('input, select');
+                    if (input) {
+                        input.focus();
+                        if (input.tagName === 'INPUT') {
+                            input.setSelectionRange(0, input.value.length);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to show edit modal:', error);
+                    showError('UI Error', 'Failed to open edit dialog');
                 }
             }
         };
