@@ -95,16 +95,12 @@
         /* Load Google API and GIS client libraries */
         async function loadGoogleAPIs() {
             try {
-                await Promise.all([
-                    loadScript('https://apis.google.com/js/api.js').then(() => {
-                        console.log('GAPI script loaded');
-                        return initializeGapiClient();
-                    }),
-                    loadScript('https://accounts.google.com/gsi/client').then(() => {
-                        console.log('GIS script loaded');
-                        return initGIS();
-                    })
-                ]);
+                await loadScript('https://apis.google.com/js/api.js');
+                console.log('GAPI script loaded');
+                await initializeGapiClient();
+                await loadScript('https://accounts.google.com/gsi/client');
+                console.log('GIS script loaded');
+                await initGIS();
                 console.log('Google APIs and GIS client loaded and initialized');
             } catch (error) {
                 console.error('Error loading Google APIs:', error);
@@ -119,11 +115,10 @@
                     if (!window.gisClient) {
                         throw new Error('GIS client not initialized.');
                     }
-                    showLoading();
-                    window.gisClient.requestAccessToken({
-                        prompt: ''
-                    });
-                    console.log("requestAccessToken initiated")
+                    console.log("Requesting access token...");
+                    window.gisClient.requestAccessToken({ prompt: '' });
+                    /* Token response will be handled in the callback, resolve immediately */
+                    resolve();
                 } catch (error) {
                     console.error('Error requesting access token:', error);
                     showError('Authentication Error', 'Failed to request access token.');
@@ -131,7 +126,6 @@
                 }
             });
         }
-
         /* Handle sign-in */
         async function handleSignIn() {
             try {
@@ -144,7 +138,6 @@
                 hideLoading();
             }
         }
-
         /* Initialize application */
         async function initializeApp() {
             if (isInitializing || isInitialized) {
@@ -209,9 +202,7 @@
                 isInitializing = false;
                 hideLoading();
             }
-        }
-
-        /* Load configuration */
+        }        /* Load configuration */
         async function loadConfiguration() {
             try {
                 /* Try to load from localStorage first */
@@ -364,7 +355,7 @@
         /* Error Handling Functions */
         function showError(title, message) {
             console.error('Error:', title, message);
-            
+
             const notification = document.querySelector('.error-notification');
             if (!notification) {
                 console.error('Error: error-notification element not found');
@@ -373,7 +364,7 @@
 
             const titleElement = notification.querySelector('.error-title');
             const messageElement = notification.querySelector('.error-message');
-            
+
             if (!titleElement || !messageElement) {
                 console.error('Error: Missing title or message element within error-notification');
                 return;
@@ -382,7 +373,7 @@
             titleElement.textContent = title;
             messageElement.textContent = message;
             notification.classList.add('show');
-            
+
             setTimeout(() => {
                 notification.classList.remove('show');
             }, 5000);
@@ -427,7 +418,7 @@
                 <div class="info-message">${message}</div>
             `;
             document.body.appendChild(notification);
-            
+
             setTimeout(() => {
                 notification.remove();
             }, 5000);
@@ -447,12 +438,12 @@
                 <div class="warning-message">${message}</div>
             `;
             document.body.appendChild(notification);
-            
+
             setTimeout(() => {
                 notification.remove();
             }, 5000);
-        }  
-       
+        }
+
         /* Clear stored credentials */
         function clearStoredCredentials() {
             localStorage.removeItem('APP_CONFIG');
@@ -490,15 +481,15 @@
             showError('Initialization Error', message);
         }
 
-          /* Save current transaction for later */
-          async function saveForLater() {
+        /* Save current transaction for later */
+        async function saveForLater() {
             if (!window.transactions || window.transactions.length === 0) {
                 showError("No Transaction", "Please enter a transaction first.");
                 return;
             }
 
             let savedCount = 0;
-            
+
             for (const transaction of window.transactions) {
                 if (OfflineStorage.savePendingTransaction(transaction)) {
                     savedCount++;
@@ -521,7 +512,7 @@
             }
 
             let savedCount = 0;
-            
+
             for (const transaction of window.transactions) {
                 if (OfflineStorage.savePendingTransaction(transaction)) {
                     savedCount++;
@@ -540,13 +531,13 @@
         /* Loading State Functions */
         let loadingCount = 0;
         let loadingTimeout = null;
-        
+
         function showLoading() {
             loadingCount++;
             const overlay = document.querySelector('.loading-overlay');
             if (overlay && loadingCount > 0) {
                 overlay.style.display = 'flex';
-                
+
                 /* Set a timeout to clear loading if it takes too long */
                 if (loadingTimeout) clearTimeout(loadingTimeout);
                 loadingTimeout = setTimeout(() => {
@@ -628,16 +619,16 @@
         function clearForm() {
             const inputText = document.getElementById('inputText');
             if (inputText) inputText.value = '';
-            
+
             window.transactions = [];
             window.currentTransactionIndex = 0;
-            
+
             const editableContainer = document.getElementById('editableContainer');
             if (editableContainer) editableContainer.innerHTML = '';
-            
+
             const livePreview = document.querySelector('.live-preview');
             if (livePreview) livePreview.classList.remove('show');
-            
+
             updateTransactionCounter();
         }
 
@@ -646,9 +637,9 @@
             const indicator = document.querySelector('.transaction-indicator');
             const prevBtn = document.getElementById('prevTransaction');
             const nextBtn = document.getElementById('nextTransaction');
-            
+
             if (!indicator || !prevBtn || !nextBtn) return;
-            
+
             if (window.transactions && window.transactions.length > 0) {
                 indicator.textContent = `${window.currentTransactionIndex + 1} of ${window.transactions.length}`;
                 prevBtn.disabled = window.currentTransactionIndex === 0;
@@ -736,9 +727,9 @@
 
         /* Bootstrap the application */
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', bootstrapApp);
+            document.addEventListener('DOMContentLoaded', initializeApp);
         } else {
-            bootstrapApp();
+            initializeApp();
         }
 
         /** Core Functions */
@@ -1195,14 +1186,14 @@
                 try {
                     this.currentField = field;
                     this.currentValue = value;
-                    
+
                     const modal = document.querySelector('.edit-modal');
                     const content = modal.querySelector('.edit-modal-content');
                     if (!modal || !content) {
                         console.error('Modal elements not found');
                         return;
                     }
-                    
+
                     let inputHtml = '';
                     if (field === "What's the Purchase Category") {
                         inputHtml = `
@@ -1219,15 +1210,15 @@
                     } else {
                         inputHtml = `<input type="text" class="editable-input" value="${(value || '').replace(/"/g, '"')}" style="width: 100%; padding: 8px;">`;
                     }
-                    
+
                     content.innerHTML = inputHtml;
-                    
+
                     modal.classList.add('show');
                     const overlay = document.querySelector('.edit-overlay');
                     if (overlay) {
                         overlay.classList.add('show');
                     }
-                    
+
                     const input = content.querySelector('input, select');
                     if (input) {
                         input.focus();
@@ -1243,33 +1234,33 @@
         };
 
         /* Close modals */
-        window.closeEditModal = function() {
+        window.closeEditModal = function () {
             document.querySelector('.edit-modal').classList.remove('show');
             document.querySelector('.edit-overlay').classList.remove('show');
         };
 
-        window.closeTransactionReview = function() {
+        window.closeTransactionReview = function () {
             const modal = document.querySelector('.edit-modal.show');
             if (modal) modal.remove();
             document.querySelector('.edit-overlay').classList.remove('show');
         };
 
-        window.closePendingTransactions = function() {
+        window.closePendingTransactions = function () {
             const modal = document.querySelector('.edit-modal.show');
             if (modal) modal.remove();
             document.querySelector('.edit-overlay').classList.remove('show');
         };
 
         /* Save edit */
-        window.saveEdit = function() {
+        window.saveEdit = function () {
             const modal = document.querySelector('.edit-modal');
             const input = modal.querySelector('.editable-input, .editable-select');
-            
+
             if (input && ModalManager.currentField && window.transactions[window.currentTransactionIndex]) {
                 window.transactions[window.currentTransactionIndex][ModalManager.currentField] = input.value;
                 displayEditableFields(window.transactions[window.currentTransactionIndex]);
             }
-            
+
             closeEditModal();
         };
 
@@ -1285,17 +1276,17 @@
                 showLoading();
                 const pending = OfflineStorage.getPendingTransactions();
                 const transaction = pending.find(t => t.id === id);
-                
+
                 if (!transaction) {
                     throw new Error('Transaction not found');
                 }
 
                 window.transactions = [transaction];
                 window.currentTransactionIndex = 0;
-                
+
                 await submitTransaction();
                 OfflineStorage.removePendingTransaction(id);
-                
+
                 const remaining = OfflineStorage.getPendingTransactions();
                 closePendingTransactions();
                 if (remaining.length > 0) {
@@ -1315,7 +1306,7 @@
                 showLoading();
                 const pending = OfflineStorage.getPendingTransactions();
                 let successCount = 0;
-                
+
                 for (const transaction of pending) {
                     try {
                         window.transactions = [transaction];
@@ -1327,12 +1318,12 @@
                         console.error('Failed to submit transaction:', error);
                     }
                 }
-                
+
                 closePendingTransactions();
                 if (successCount > 0) {
                     showSuccess(`Successfully submitted ${successCount} transaction${successCount > 1 ? 's' : ''}`);
                 }
-                
+
                 const remaining = OfflineStorage.getPendingTransactions();
                 if (remaining.length > 0) {
                     showPendingTransactions();
@@ -1345,7 +1336,7 @@
             }
         }
 
-       
+
         /* Update Pending Badge */
         function updatePendingBadge() {
             const badge = document.querySelector('.pending-badge');
