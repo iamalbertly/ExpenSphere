@@ -15,19 +15,37 @@
     <script>
         /* Configuration */
         window.APP_CONFIG = {
-            clientId: '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com',
-            apiKey: 'AIzaSyAh3L8v1pO6i6_2sJ0gPUnAE___jvPL0lU',
-            spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA',
-            scope: 'https://www.googleapis.com/auth/spreadsheets'
+            clientId: '35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com', /* Web app Client ID */
+            apiKey: 'AIzaSyAh3L8v1pO6i6_2sJ0gPUnAE___jvPL0lU', /* API Key */
+            spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA', /* Spreadsheet ID */
+            scope: 'https://www.googleapis.com/auth/spreadsheets' /* Scope */
         };
 
         let isInitializing = false;
         let isInitialized = false;
         let gisLoaded = false;
         let gapiLoaded = false;
-        /* Load a script dynamically */
+
+        let isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        if (isLocalhost) {
+            window.APP_CONFIG.clientId = '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com'; /* Desktop app Client ID */
+        } else {
+            window.APP_CONFIG.clientId = '35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com'; /* Web app Client ID */
+        }
+
+
+
+        /* Load a script dynamically, with caching check */
         function loadScript(src) {
             return new Promise((resolve, reject) => {
+                /* Check if the script is already loaded */
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    console.log(`Script ${src} already loaded`);
+                    resolve();
+                    return;
+                }
+
                 const script = document.createElement('script');
                 script.src = src;
                 script.async = true;
@@ -62,32 +80,40 @@
         /* Initialize the GIS client */
         async function initGIS() {
             return new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    console.error('GIS initialization timed out');
+                    showError('Authentication Error', 'GIS Initialization timed out.');
+                    reject(new Error('GIS initialization timed out'));
+                }, 10000); /* 10-second timeout */
+
                 try {
                     console.log('Initializing GIS client...');
                     window.gisClient = google.accounts.oauth2.initTokenClient({
                         client_id: window.APP_CONFIG.clientId,
                         scope: window.APP_CONFIG.scope,
-                        callback: (tokenResponse) => {
+                        callback: async (tokenResponse) => {
+                            clearTimeout(timeoutId); /* Clear the timeout */
                             if (tokenResponse && tokenResponse.access_token) {
                                 console.log('GIS client initialized and token received');
                                 gapi.client.setToken(tokenResponse);
                                 isInitialized = true;
                                 resolve();
                             } else {
-                                console.error('Failed to get access token');
-                                showError('Authentication Error', 'Failed to get access token.');
+                                console.error('Failed to get access token', tokenResponse);
+                                showError('Authentication Error', `Failed to get access token: ${tokenResponse.error} : ${tokenResponse.error_description}`);
                                 reject(new Error('Failed to get access token'));
                             }
                         },
                         error_callback: (error) => {
+                            clearTimeout(timeoutId); /* Clear the timeout */
                             console.error('GIS client error:', error);
-                            showError('Authentication Error', 'Failed to initialize GIS client.');
+                            showError('Authentication Error', `GIS client error: ${error.message || error}`);
                             reject(error);
                         }
                     });
-                    gisLoaded = true;
                     console.log('GIS client initialization started');
                 } catch (error) {
+                    clearTimeout(timeoutId); /* Clear the timeout */
                     console.error('Failed to initialize GIS client:', error);
                     showError('Authentication Error', 'Failed to initialize GIS client.');
                     reject(error);
@@ -143,39 +169,55 @@
 
         /* Handle sign-in */
         async function handleSignIn() {
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
+                showLoading(); /* Show loading indicator */
                 console.log("Attempting to sign in...");
 
                 /* Ensure GIS client is initialized before requesting access token */
                 if (!window.gisClient) {
                     console.error('GIS client is not initialized.');
                     showError('Authentication Error', 'GIS client is not initialized.');
-                    reject(new Error('GIS client not initialized.'));
+                    hideLoading();
+                    resolve(false);
                     return;
                 }
 
+                /* Set up a timeout for the sign-in process */
+                const timeoutId = setTimeout(() => {
+                    console.error('Sign-in timed out');
+                    showError('Authentication Error', 'Sign-in process timed out.');
+                    hideLoading();
+                    resolve(false);
+                }, 30000); /* 30 seconds timeout */
+
+                let requestOptions = {};
+
+                /* Determine if running locally or online */
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    /* Local environment: Use select_account prompt for Desktop App credentials */
+                    requestOptions.prompt = 'select_account';
+                } else {
+                    /* Online environment: Use default (empty) prompt for Web App credentials */
+                    requestOptions.prompt = ''; /* Or you can completely omit the prompt option */
+                }
+
                 /* Request token with GIS client */
-                window.gisClient.requestAccessToken({
-                    prompt: '', /* Use empty prompt for installed apps */
-                    callback: (response) => {
-                        if (response.error) {
-                            console.error('Sign-in error:', response.error);
-                            showError('Authentication Error', `Sign-in failed: ${response.error}`);
-                            resolve(false);
-                        } else {
-                            console.log('Successfully signed in');
-                            resolve(true);
-                        }
-                    },
-                    error_callback: (err) => {
-                        console.error('Error during token request:', err);
-                        showError('Authentication Error', 'Error during token request.');
+                window.gisClient.requestAccessToken(requestOptions, (response) => {
+                    clearTimeout(timeoutId); /* Clear the timeout */
+                    hideLoading(); /* Hide loading indicator */
+                    if (response.error) {
+                        console.error('Sign-in error:', response.error);
+                        showError('Authentication Error', `Sign-in failed: ${response.error}`);
                         resolve(false);
+                    } else {
+                        console.log('Successfully signed in');
+                        resolve(true);
                     }
                 });
             });
         }
-        
+
+
         /* Initialize application */
         async function initializeApp() {
             if (isInitializing || isInitialized) {
@@ -184,6 +226,7 @@
             }
 
             isInitializing = true;
+            showLoading();
 
             try {
                 /* Initialize core objects */
@@ -218,8 +261,13 @@
                 }
                 console.log('Configuration loaded');
 
-                /* Initialize Google API clients */
-                await initClients();
+                /* Load Google APIs in the background */
+                loadGoogleAPIs().then(() => {
+                    console.log("Google APIs loaded and initialized in the background");
+                }).catch(error => {
+                    console.error("Error loading Google APIs in the background:", error);
+                    showError('API Loading Error', 'Failed to load Google APIs. Please check your internet connection.');
+                });
 
                 /* Focus on input */
                 inputTextArea.focus();
@@ -234,8 +282,11 @@
                 throw error;
             } finally {
                 isInitializing = false;
+                hideLoading();
             }
         }
+
+
 
         async function initClients() {
             try {
