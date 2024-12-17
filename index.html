@@ -67,6 +67,7 @@
                         callback: async (tokenResponse) => {
                             if (tokenResponse && tokenResponse.access_token) {
                                 console.log('GIS client initialized and token received');
+                                /* Set the token for GAPI client */
                                 gapi.client.setToken(tokenResponse);
                                 isInitialized = true;
                                 resolve();
@@ -82,8 +83,7 @@
                             reject(error);
                         }
                     });
-                    gisLoaded = true;
-                    console.log('GIS client initialized');
+                    console.log('GIS client initialization started');
                 } catch (error) {
                     console.error('Failed to initialize GIS client:', error);
                     showError('Authentication Error', 'Failed to initialize GIS client.');
@@ -92,19 +92,25 @@
             });
         }
 
-        /* Load Google API and GIS client libraries */
+        /* Load Google APIs and GIS client */
         async function loadGoogleAPIs() {
             try {
-                await loadScript('https://apis.google.com/js/api.js');
-                console.log('GAPI script loaded');
-                await initializeGapiClient();
+                /* Load the GIS client library */
                 await loadScript('https://accounts.google.com/gsi/client');
-                console.log('GIS script loaded');
+                console.log('GIS client loaded');
                 await initGIS();
+                console.log('GIS client initialized');
+
+                /* Load the GAPI client library */
+                await loadScript('https://apis.google.com/js/api.js');
+                console.log('GAPI client loaded');
+                await initializeGapiClient();
+                console.log('GAPI client initialized');
+
                 console.log('Google APIs and GIS client loaded and initialized');
             } catch (error) {
                 console.error('Error loading Google APIs:', error);
-                throw new Error('Failed to load Google APIs');
+                showError('Initialization Error', 'Failed to load Google APIs. Please check your internet connection and try again.');
             }
         }
 
@@ -126,83 +132,230 @@
                 }
             });
         }
-        /* Handle sign-in */
-        async function handleSignIn() {
-            try {
-                await requestGisToken();
-                return true;
-            } catch (error) {
-                console.error('Sign-in error:', error);
-                return false;
-            } finally {
-                hideLoading();
+       /* Handle sign-in */
+async function handleSignIn() {
+    return new Promise((resolve, reject) => {
+        showLoading(); /* Show loading indicator */
+        console.log("Attempting to sign in...");
+
+        /* Ensure GIS client is initialized before requesting access token */
+        if (!window.gisClient) {
+            console.error('GIS client is not initialized.');
+            showError('Authentication Error', 'GIS client is not initialized.');
+            hideLoading();
+            reject(new Error('GIS client not initialized.'));
+            return;
+        }
+
+        /* Request token with GIS client */
+        window.gisClient.requestAccessToken({
+            prompt: '', /* Use empty prompt for installed apps */
+            callback: (response) => {
+                hideLoading(); /* Hide loading indicator */
+                if (response.error) {
+                    console.error('Sign-in error:', response.error);
+                    showError('Authentication Error', `Sign-in failed: ${response.error}`);
+                    resolve(false);
+                } else {
+                    console.log('Successfully signed in');
+                    resolve(true);
+                }
+            },
+            error_callback: (err) => {
+                hideLoading(); /* Hide loading indicator */
+                console.error('Error during token request:', err);
+                showError('Authentication Error', 'Error during token request.');
+                resolve(false);
+            }
+        });
+    });
+}
+
+    /* Initialize application */
+async function initializeApp() {
+    if (isInitializing || isInitialized) {
+        console.log('Already initializing or initialized, skipping duplicate call');
+        return;
+    }
+
+    isInitializing = true;
+    showLoading();
+
+    try {
+        /* Initialize core objects */
+        window.transactions = [];
+        window.currentTransactionIndex = 0;
+
+        /* Add clear credentials button */
+        addClearCredentialsButton();
+
+        /* Initialize UI elements */
+        const inputTextArea = document.querySelector('#inputText');
+        if (!inputTextArea) throw new Error('Input element not found');
+
+        /* Add character counter */
+        const charCounter = document.createElement('div');
+        charCounter.className = 'character-count';
+        inputTextArea.parentNode.appendChild(charCounter);
+
+        /* Setup event listeners */
+        let debounceTimeout = null;
+        inputTextArea.addEventListener('input', (event) => {
+            const count = event.target.value.length;
+            charCounter.textContent = `${count} characters`;
+            if (debounceTimeout) clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(() => processInput(), 300);
+        });
+
+        /* Load configuration */
+        const config = await loadConfiguration();
+        if (!config || !config.clientId || !config.apiKey) {
+            throw new Error('Invalid configuration: Missing required credentials');
+        }
+        console.log('Configuration loaded');
+
+        /* Load Google APIs */
+        await loadGoogleAPIs();
+
+        /* Focus on input */
+        inputTextArea.focus();
+
+        /* Update UI state */
+        updatePendingBadge();
+
+        console.log('App initialization completed');
+    } catch (error) {
+        console.error('Initialization Error:', error);
+        showError('Initialization Error', error.message);
+        throw error;
+    } finally {
+        isInitializing = false;
+        hideLoading();
+    }
+}    
+
+async function submitTransaction() {
+    if (!window.transactions || window.transactions.length === 0) {
+        showError("No Transaction", "Please enter a transaction first.");
+        return;
+    }
+
+    try {
+        showLoading();
+
+        /* Check if the application is initialized and the user is authenticated */
+        if (!isInitialized) {
+            console.log('Application not initialized, attempting to initialize and sign in...');
+            await initializeApp(); /* Ensure the app is initialized */
+            if (!isInitialized) {
+                const signedIn = await handleSignIn(); /* Attempt to sign in */
+                if (!signedIn) {
+                    throw new Error('auth_required');
+                }
             }
         }
-        /* Initialize application */
-        async function initializeApp() {
-            if (isInitializing || isInitialized) {
-                console.log('Already initializing or initialized, skipping duplicate call');
-                return;
-            }
 
+        /* Proceed with transaction submission */
+        let submittedCount = 0;
+        const errors = [];
+
+        for (const transaction of window.transactions) {
             try {
-                isInitializing = true;
+                const values = [
+                    [
+                        transaction["Date of Transaction"] || '',
+                        transaction["Where did the money come from?"] || '',
+                        transaction["How much money? (Tsh)"] || '0',
+                        transaction["What's the Purchase Category"] || '',
+                        transaction["Purchase Description"] || '',
+                        transaction["Where was the money payed to?"] || '',
+                        transaction["Confidence level"] || ''
+                    ]
+                ];
 
-                /* Initialize core objects */
-                window.transactions = [];
-                window.currentTransactionIndex = 0;
-
-                /* Add clear credentials button */
-                addClearCredentialsButton();
-
-                /* Initialize UI elements */
-                const inputTextArea = document.querySelector('#inputText');
-                if (!inputTextArea) throw new Error('Input element not found');
-
-                /* Add character counter */
-                const charCounter = document.createElement('div');
-                charCounter.className = 'character-count';
-                inputTextArea.parentNode.appendChild(charCounter);
-
-                /* Setup event listeners */
-                let debounceTimeout = null;
-                inputTextArea.addEventListener('input', (event) => {
-                    /* Update character count */
-                    const count = event.target.value.length;
-                    charCounter.textContent = `${count} characters`;
-
-                    /* Process input with debounce */
-                    if (debounceTimeout) clearTimeout(debounceTimeout);
-                    debounceTimeout = setTimeout(() => processInput(), 300);
+                await gapi.client.sheets.spreadsheets.values.append({
+                    spreadsheetId: window.APP_CONFIG.spreadsheetId,
+                    range: 'ExpenseResults!A:G',
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values }
                 });
-
-                /* Load configuration */
-                const config = await loadConfiguration();
-                if (!config || !config.clientId || !config.apiKey) {
-                    throw new Error('Invalid configuration: Missing required credentials');
-                }
-                console.log('Configuration loaded');
-
-                /* Load Google APIs */
-                showLoading();
-                await loadGoogleAPIs();
-
-                /* Focus on input */
-                inputTextArea.focus();
-
-                /* Update UI state */
-                updatePendingBadge();
-
-                console.log('App initialization completed');
+                submittedCount++;
             } catch (error) {
-                console.error('Initialization Error:', error);
-                showError('Initialization Error', error.message);
-                throw error;
-            } finally {
-                isInitializing = false;
-                hideLoading();
+                console.error('Failed to submit transaction:', error);
+                errors.push(error);
             }
-        }        /* Load configuration */
+        }
+
+        /* Handle success/failure */
+        if (submittedCount === window.transactions.length) {
+            showSuccess('All transactions submitted successfully');
+            clearForm();
+        } else if (submittedCount > 0) {
+            showWarning('Partial Success', `${submittedCount} out of ${window.transactions.length} transactions submitted. Saving remaining offline.`);
+            for (let i = submittedCount; i < window.transactions.length; i++) {
+                try {
+                    OfflineStorage.savePendingTransaction(window.transactions[i]);
+                } catch (error) {
+                    console.error('Failed to save transaction offline:', error);
+                }
+            }
+            updatePendingBadge();
+            clearForm();
+        } else {
+            throw new Error('submit_failed');
+        }
+    } catch (error) {
+        console.error('Submit Error:', error);
+        /* Handle specific error cases */
+        switch (error.message) {
+            case 'auth_required':
+                showError('Authentication Required', 'Please sign in to submit transactions.');
+                break;
+            case 'token_error':
+                showError('Authentication Error', 'Failed to obtain access token. Please try signing in again.');
+                break;
+            case 'submit_failed':
+                showError('Submit Error', 'Failed to submit transactions. Saving all offline.');
+                for (const transaction of window.transactions) {
+                    try {
+                        OfflineStorage.savePendingTransaction(transaction);
+                    } catch (saveError) {
+                        console.error('Failed to save transaction offline:', saveError);
+                    }
+                }
+                updatePendingBadge();
+                break;
+            default:
+                const status = error?.status;
+                if (status === 403) {
+                    showError('Access Denied', 'You don\'t have permission to modify this spreadsheet.');
+                } else if (status === 404) {
+                    showError('Spreadsheet Not Found', 'The target spreadsheet could not be found.');
+                } else if (status === 429) {
+                    showError('Rate Limit Exceeded', 'Too many requests. Please try again later.');
+                } else {
+                    showError('Submit Error', 'An unexpected error occurred. Saving offline.');
+                    if (error.message === 'Failed to load Google APIs') {
+                        showError('API Loading Failed', 'Please refresh the page to try again.');
+                    }
+                    for (const transaction of window.transactions) {
+                        try {
+                            OfflineStorage.savePendingTransaction(transaction);
+                        } catch (saveError) {
+                            console.error('Failed to save transaction offline:', saveError);
+                        }
+                    }
+                    updatePendingBadge();
+                }
+        }
+    } finally {
+        hideLoading();
+    }
+}
+
+
+
+/* Load configuration */
         async function loadConfiguration() {
             try {
                 /* Try to load from localStorage first */
@@ -222,131 +375,7 @@
             }
         }
 
-        /* Submit transaction to Google Sheets */
-        async function submitTransaction() {
-            if (!window.transactions || window.transactions.length === 0) {
-                showError("No Transaction", "Please enter a transaction first.");
-                return;
-            }
-
-            try {
-                showLoading();
-
-                /* Ensure that both GAPI and GIS are loaded before proceeding */
-                if (!gapiLoaded || !gisLoaded) {
-                    console.log('APIs not fully loaded, waiting...');
-                    await loadGoogleAPIs();
-                }
-
-                /* Check if the user is authenticated */
-                if (!isInitialized) {
-                    console.log('Application not initialized or user not authenticated, attempting sign in...');
-                    const signedIn = await handleSignIn();
-                    if (!signedIn) {
-                        throw new Error('auth_required');
-                    }
-                }
-
-                /* Submit transactions */
-                let submittedCount = 0;
-                const errors = [];
-
-                for (const transaction of window.transactions) {
-                    try {
-                        const values = [
-                            [
-                                transaction["Date of Transaction"] || '',
-                                transaction["Where did the money come from?"] || '',
-                                transaction["How much money? (Tsh)"] || '0',
-                                transaction["What's the Purchase Category"] || '',
-                                transaction["Purchase Description"] || '',
-                                transaction["Where was the money payed to?"] || '',
-                                transaction["Confidence level"] || ''
-                            ]
-                        ];
-
-                        await gapi.client.sheets.spreadsheets.values.append({
-                            spreadsheetId: window.APP_CONFIG.spreadsheetId,
-                            range: 'ExpenseResults!A:G',
-                            valueInputOption: 'USER_ENTERED',
-                            resource: { values }
-                        });
-                        submittedCount++;
-                    } catch (error) {
-                        console.error('Failed to submit transaction:', error);
-                        errors.push(error);
-                    }
-                }
-
-                /* Handle partial or complete success/failure */
-                if (submittedCount === window.transactions.length) {
-                    showSuccess('All transactions submitted successfully');
-                    clearForm();
-                } else if (submittedCount > 0) {
-                    showWarning('Partial Success', `${submittedCount} out of ${window.transactions.length} transactions submitted. Saving remaining offline.`);
-                    /* Save failed transactions offline */
-                    for (let i = submittedCount; i < window.transactions.length; i++) {
-                        try {
-                            OfflineStorage.savePendingTransaction(window.transactions[i]);
-                        } catch (error) {
-                            console.error('Failed to save transaction offline:', error);
-                        }
-                    }
-                    updatePendingBadge();
-                    clearForm();
-                } else {
-                    throw new Error('submit_failed');
-                }
-            } catch (error) {
-                console.error('Submit Error:', error);
-
-                /* Handle specific error cases */
-                switch (error.message) {
-                    case 'auth_required':
-                        showError('Authentication Required', 'Please sign in to submit transactions.');
-                        break;
-                    case 'token_error':
-                        showError('Authentication Error', 'Failed to obtain access token. Please try signing in again.');
-                        break;
-                    case 'submit_failed':
-                        showError('Submit Error', 'Failed to submit transactions. Saving all offline.');
-                        for (const transaction of window.transactions) {
-                            try {
-                                OfflineStorage.savePendingTransaction(transaction);
-                            } catch (saveError) {
-                                console.error('Failed to save transaction offline:', saveError);
-                            }
-                        }
-                        updatePendingBadge();
-                        break;
-                    default: {
-                        const status = error?.status;
-                        if (status === 403) {
-                            showError('Access Denied', 'You don\'t have permission to modify this spreadsheet.');
-                        } else if (status === 404) {
-                            showError('Spreadsheet Not Found', 'The target spreadsheet could not be found.');
-                        } else if (status === 429) {
-                            showError('Rate Limit Exceeded', 'Too many requests. Please try again later.');
-                        } else {
-                            showError('Submit Error', 'An unexpected error occurred. Saving offline.');
-                            if (error.message === 'Failed to load Google APIs') {
-                                showError('API Loading Failed', 'Please refresh the page to try again.');
-                            }
-                            for (const transaction of window.transactions) {
-                                try {
-                                    OfflineStorage.savePendingTransaction(transaction);
-                                } catch (saveError) {
-                                    console.error('Failed to save transaction offline:', saveError);
-                                }
-                            }
-                            updatePendingBadge();
-                        }
-                    }
-                }
-            } finally {
-                hideLoading();
-            }
-        }
+       
         /* Show initialization error */
         function showInitializationError(message) {
             showError('Initialization Error', message);
