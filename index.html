@@ -26,8 +26,8 @@
         let gisLoaded = false;
         let gapiLoaded = false;
 
-        let isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
+        let isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '';
+        console.log(`result on local or not is ${isLocalhost}`);
         if (isLocalhost) {
             window.APP_CONFIG.clientId = '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com'; /* Desktop app Client ID */
         } else {
@@ -67,7 +67,7 @@
                             discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
                         });
                         console.log('GAPI client initialized');
-                        gapiLoaded = true;
+                        gapiLoaded = true; /* Set gapiLoaded to true here */
                         resolve();
                     } catch (error) {
                         console.error('Failed to initialize GAPI client:', error);
@@ -76,6 +76,8 @@
                 });
             });
         }
+
+
 
         /* Initialize the GIS client */
         async function initGIS() {
@@ -91,8 +93,9 @@
                     window.gisClient = google.accounts.oauth2.initTokenClient({
                         client_id: window.APP_CONFIG.clientId,
                         scope: window.APP_CONFIG.scope,
+                        ux_mode: 'popup', /* Add this line */
                         callback: async (tokenResponse) => {
-                            clearTimeout(timeoutId); /* Clear the timeout */
+                            clearTimeout(timeoutId);
                             if (tokenResponse && tokenResponse.access_token) {
                                 console.log('GIS client initialized and token received');
                                 gapi.client.setToken(tokenResponse);
@@ -105,21 +108,26 @@
                             }
                         },
                         error_callback: (error) => {
-                            clearTimeout(timeoutId); /* Clear the timeout */
+                            clearTimeout(timeoutId);
                             console.error('GIS client error:', error);
                             showError('Authentication Error', `GIS client error: ${error.message || error}`);
                             reject(error);
                         }
                     });
+                    gisLoaded = true; /* Moved this line up here */
                     console.log('GIS client initialization started');
                 } catch (error) {
-                    clearTimeout(timeoutId); /* Clear the timeout */
+                    clearTimeout(timeoutId);
                     console.error('Failed to initialize GIS client:', error);
                     showError('Authentication Error', 'Failed to initialize GIS client.');
                     reject(error);
                 }
             });
         }
+
+
+
+
 
         async function loadGoogleAPIs() {
             try {
@@ -157,7 +165,6 @@
                     }
                     console.log("Requesting access token...");
                     window.gisClient.requestAccessToken({ prompt: '' });
-                    /* Token response will be handled in the callback, resolve immediately */
                     resolve();
                 } catch (error) {
                     console.error('Error requesting access token:', error);
@@ -170,14 +177,12 @@
         /* Handle sign-in */
         async function handleSignIn() {
             return new Promise((resolve) => {
-                showLoading(); /* Show loading indicator */
                 console.log("Attempting to sign in...");
 
                 /* Ensure GIS client is initialized before requesting access token */
                 if (!window.gisClient) {
                     console.error('GIS client is not initialized.');
                     showError('Authentication Error', 'GIS client is not initialized.');
-                    hideLoading();
                     resolve(false);
                     return;
                 }
@@ -186,7 +191,6 @@
                 const timeoutId = setTimeout(() => {
                     console.error('Sign-in timed out');
                     showError('Authentication Error', 'Sign-in process timed out.');
-                    hideLoading();
                     resolve(false);
                 }, 30000); /* 30 seconds timeout */
 
@@ -202,18 +206,8 @@
                 }
 
                 /* Request token with GIS client */
-                window.gisClient.requestAccessToken(requestOptions, (response) => {
-                    clearTimeout(timeoutId); /* Clear the timeout */
-                    hideLoading(); /* Hide loading indicator */
-                    if (response.error) {
-                        console.error('Sign-in error:', response.error);
-                        showError('Authentication Error', `Sign-in failed: ${response.error}`);
-                        resolve(false);
-                    } else {
-                        console.log('Successfully signed in');
-                        resolve(true);
-                    }
-                });
+                window.gisClient.requestAccessToken(requestOptions);
+                resolve(true);
             });
         }
 
@@ -226,7 +220,7 @@
             }
 
             isInitializing = true;
-            showLoading();
+           
 
             try {
                 /* Initialize core objects */
@@ -1295,25 +1289,6 @@
                 showSuccess('Transaction removed successfully');
             }
         };
-
-
-        function showLoading() {
-            loadingCount++;
-            const overlay = document.querySelector('.loading-overlay');
-            if (overlay && loadingCount > 0) {
-                overlay.style.display = 'flex';
-
-                /* Set a timeout to clear loading if it takes too long */
-                if (loadingTimeout) clearTimeout(loadingTimeout);
-                loadingTimeout = setTimeout(() => {
-                    if (loadingCount > 0) {
-                        console.warn('Loading timeout reached, forcing clear');
-                        loadingCount = 0;
-                        hideLoading();
-                    }
-                }, 100000); /* 10 second timeout */
-            }
-        }
 
         function hideLoading() {
             loadingCount = Math.max(0, loadingCount - 1);
@@ -3361,7 +3336,7 @@
 </head>
 
 <body>
-    <div class="loading-overlay">
+    <div class="loading-overlay" style="display:none">
         <div class="loading-spinner"></div>
     </div>
     <div class="error-notification">
