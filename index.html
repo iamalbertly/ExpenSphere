@@ -79,19 +79,19 @@
 
                         if (id_token) {
                             console.log('GIS client initialized and token received');
-                            gapi.client.setToken({id_token}); //Use id_token instead of access_token
+                            gapi.client.setToken({id_token}); /* Use id_token instead of access_token */
                             isInitialized = true;
                             resolve();
                         } else {
                             console.error('Failed to get ID token');
-                            /* ... handle error */
+                            
                             reject(new Error('Failed to get ID token'));
                         }
                     },
                     (error) => {
                         clearTimeout(timeoutId);
                         console.error('Authentication error', error);
-                        /* ... handle error */
+                        
                         reject(new Error('Authentication failed'));
                     }
                 );

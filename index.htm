@@ -57,6 +57,16 @@
                 return config;
             }
         }
+        function escapeHTML(unsafe) {
+         return unsafe
+             .replace(/&/g, "&")
+             .replace(/</g, "<")
+             .replace(/>/g, ">")
+             .replace(/"/g, "\"")
+             .replace(/'/g, "&#039;");
+     }
+
+
 
         async function loadAndRenderHTML() {
             const GITHUB_URL = "https://raw.githubusercontent.com/iamalbertly/ExpenSphere/main/index-min.html";
@@ -97,7 +107,7 @@
                 }
 
                 document.open();
-                document.write(htmlContent);
+                document.write( escapeHTML(htmlContent));
                 document.close();
             } catch (error) {
                 console.error("Error rendering HTML:", error);
