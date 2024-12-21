@@ -139,7 +139,7 @@
                         window.gisClient = google.accounts.oauth2.initTokenClient({
                             client_id: window.APP_CONFIG.clientId,
                             scope: window.APP_CONFIG.scope,
-                            ux_mode: 'popup',
+                            ux_mode: isLocalhost ? 'popup' : 'redirect',
                             callback: async (tokenResponse) => {
                                 clearTimeout(timeoutId);
                                 if (tokenResponse && tokenResponse.access_token) {
@@ -222,12 +222,14 @@
         /* Handle sign-in */
         async function handleSignIn() {
             return new Promise((resolve) => {
+                showLoading();
                 console.log("Attempting to sign in...");
 
                 /* Ensure GIS client is initialized before requesting access token */
                 if (!window.gisClient) {
                     console.error('GIS client is not initialized.');
                     showError('Authentication Error', 'GIS client is not initialized.');
+                    hideLoading();
                     resolve(false);
                     return;
                 }
@@ -236,6 +238,7 @@
                 const timeoutId = setTimeout(() => {
                     console.error('Sign-in timed out');
                     showError('Authentication Error', 'Sign-in process timed out.');
+                    hideLoading();
                     resolve(false);
                 }, 30000); /* 30 seconds timeout */
 
@@ -253,6 +256,7 @@
                 /* Request token with GIS client */
                 window.gisClient.requestAccessToken(requestOptions, (response) => {
                     clearTimeout(timeoutId); /* Clear the timeout */
+                    hideLoading();
                     if (response.error) {
                         console.error('Sign-in error:', response.error);
                         showError('Authentication Error', `Sign-in failed: ${response.error}`);

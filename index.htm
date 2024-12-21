@@ -57,14 +57,6 @@
                 return config;
             }
         }
-        function escapeHTML(unsafe) {
-         return unsafe
-             .replace(/&/g, "&")
-             .replace(/</g, "<")
-             .replace(/>/g, ">")
-             .replace(/"/g, "\"")
-             .replace(/'/g, "&#039;");
-     }
 
 
 
@@ -107,7 +99,7 @@
                 }
 
                 document.open();
-                document.write( escapeHTML(htmlContent));
+                document.write( htmlContent);
                 document.close();
             } catch (error) {
                 console.error("Error rendering HTML:", error);
