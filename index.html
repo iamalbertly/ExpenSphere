@@ -11,11 +11,10 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Load GAPI Client Library -->
     <script src="https://apis.google.com/js/api.js" async defer></script>
-    <!-- Load Google APIs -->
     <script>
         /* Configuration */
         window.APP_CONFIG = {
-            clientId: '35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com', /* Web app Client ID */
+            clientId: '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com', /* Web app Client ID */
             apiKey: 'AIzaSyAh3L8v1pO6i6_2sJ0gPUnAE___jvPL0lU', /* API Key */
             spreadsheetId: '1dagJ19LGKdGy1o_uD2Ggsyi2kt8PhTyVXfufO4A55eA', /* Spreadsheet ID */
             scope: 'https://www.googleapis.com/auth/spreadsheets' /* Scope */
@@ -27,7 +26,7 @@
         let gapiLoaded = false;
 
         let isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '';
-        console.log(`result on local or not is ${isLocalhost}`);
+        console.log(`local: ${isLocalhost}`);
         if (isLocalhost) {
             window.APP_CONFIG.clientId = '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com'; /* Desktop app Client ID */
         } else {
@@ -67,7 +66,7 @@
                             discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
                         });
                         console.log('GAPI client initialized');
-                        gapiLoaded = true; /* Set gapiLoaded to true here */
+                        gapiLoaded = true;
                         resolve();
                     } catch (error) {
                         console.error('Failed to initialize GAPI client:', error);
@@ -77,58 +76,76 @@
             });
         }
 
-
-
         /* Initialize the GIS client */
         async function initGIS() {
-            return new Promise((resolve, reject) => {
-                const timeoutId = setTimeout(() => {
-                    console.error('GIS initialization timed out');
-                    showError('Authentication Error', 'GIS Initialization timed out.');
-                    reject(new Error('GIS initialization timed out'));
-                }, 10000); /* 10-second timeout */
+            let retries = 0;
+            const maxRetries = 3;
+            const retryDelay = 2000; /* 2 seconds */
 
-                try {
-                    console.log('Initializing GIS client...');
-                    window.gisClient = google.accounts.oauth2.initTokenClient({
-                        client_id: window.APP_CONFIG.clientId,
-                        scope: window.APP_CONFIG.scope,
-                        ux_mode: 'popup', /* Add this line */
-                        callback: async (tokenResponse) => {
-                            clearTimeout(timeoutId);
-                            if (tokenResponse && tokenResponse.access_token) {
-                                console.log('GIS client initialized and token received');
-                                gapi.client.setToken(tokenResponse);
-                                isInitialized = true;
-                                resolve();
+            return new Promise((resolve, reject) => {
+                const attemptInit = () => {
+                    const timeoutId = setTimeout(() => {
+                        console.error('GIS initialization timed out');
+                        showError('Authentication Error', 'GIS Initialization timed out.');
+                        reject(new Error('GIS initialization timed out'));
+                    }, 10000); /* 10-second timeout */
+
+                    try {
+                        if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+                            console.error('GIS client not yet available');
+                            if (retries < maxRetries) {
+                                retries++;
+                                console.log(`Retrying GIS initialization (${retries}/${maxRetries})...`);
+                                setTimeout(attemptInit, retryDelay);
                             } else {
-                                console.error('Failed to get access token', tokenResponse);
-                                showError('Authentication Error', `Failed to get access token: ${tokenResponse.error} : ${tokenResponse.error_description}`);
-                                reject(new Error('Failed to get access token'));
+                                clearTimeout(timeoutId);
+                                console.error('Failed to initialize GIS client after retries');
+                                showError('Authentication Error', 'Failed to initialize GIS client after multiple retries.');
+                                reject(new Error('Failed to initialize GIS client after retries'));
                             }
-                        },
-                        error_callback: (error) => {
-                            clearTimeout(timeoutId);
-                            console.error('GIS client error:', error);
-                            showError('Authentication Error', `GIS client error: ${error.message || error}`);
-                            reject(error);
+                            return;
                         }
-                    });
-                    gisLoaded = true; /* Moved this line up here */
-                    console.log('GIS client initialization started');
-                } catch (error) {
-                    clearTimeout(timeoutId);
-                    console.error('Failed to initialize GIS client:', error);
-                    showError('Authentication Error', 'Failed to initialize GIS client.');
-                    reject(error);
-                }
+
+                        console.log('Initializing GIS client...');
+                        window.gisClient = google.accounts.oauth2.initTokenClient({
+                            client_id: window.APP_CONFIG.clientId,
+                            scope: window.APP_CONFIG.scope,
+                            ux_mode: 'popup',
+                            callback: async (tokenResponse) => {
+                                clearTimeout(timeoutId);
+                                if (tokenResponse && tokenResponse.access_token) {
+                                    console.log('GIS client initialized and token received');
+                                    gapi.client.setToken(tokenResponse);
+                                    isInitialized = true;
+                                    resolve();
+                                } else {
+                                    console.error('Failed to get access token', tokenResponse);
+                                    showError('Authentication Error', `Failed to get access token: ${tokenResponse.error} : ${tokenResponse.error_description}`);
+                                    reject(new Error('Failed to get access token'));
+                                }
+                            },
+                            error_callback: (error) => {
+                                clearTimeout(timeoutId);
+                                console.error('GIS client error:', error);
+                                showError('Authentication Error', `GIS client error: ${error.message || error}`);
+                                reject(error);
+                            }
+                        });
+                        gisLoaded = true;
+                        console.log('GIS client initialization started');
+                    } catch (error) {
+                        clearTimeout(timeoutId);
+                        console.error('Failed to initialize GIS client:', error);
+                        showError('Authentication Error', 'Failed to initialize GIS client.');
+                        reject(error);
+                    }
+                };
+
+                attemptInit();
             });
         }
 
-
-
-
-
+        /* Load Google API and GIS client libraries */
         async function loadGoogleAPIs() {
             try {
                 /* Load the GIS client library first */
@@ -154,7 +171,6 @@
                 throw error; /* Re-throw the error to be handled by the caller */
             }
         }
-
 
         /* Request GIS token */
         async function requestGisToken() {
@@ -206,11 +222,19 @@
                 }
 
                 /* Request token with GIS client */
-                window.gisClient.requestAccessToken(requestOptions);
-                resolve(true);
+                window.gisClient.requestAccessToken(requestOptions, (response) => {
+                    clearTimeout(timeoutId); /* Clear the timeout */
+                    if (response.error) {
+                        console.error('Sign-in error:', response.error);
+                        showError('Authentication Error', `Sign-in failed: ${response.error}`);
+                        resolve(false);
+                    } else {
+                        console.log('Successfully signed in');
+                        resolve(true);
+                    }
+                });
             });
         }
-
 
         /* Initialize application */
         async function initializeApp() {
@@ -220,7 +244,6 @@
             }
 
             isInitializing = true;
-           
 
             try {
                 /* Initialize core objects */
@@ -276,7 +299,6 @@
                 throw error;
             } finally {
                 isInitializing = false;
-                hideLoading();
             }
         }
 
@@ -473,12 +495,23 @@
         /* Load configuration */
         async function loadConfiguration() {
             try {
-                /* Try to load from localStorage first */
+                /* Try to load from localStorage first  */
                 const storedConfig = localStorage.getItem('APP_CONFIG');
                 if (storedConfig) {
                     window.APP_CONFIG = JSON.parse(storedConfig);
                     console.log('Configuration loaded from localStorage');
                     return window.APP_CONFIG;
+                }
+
+                /* Check if running on localhost */
+                let isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '';
+                console.log(`local: ${isLocalhost}`);
+
+                /* Update client ID based on the environment */
+                if (isLocalhost) {
+                    window.APP_CONFIG.clientId = '35324134118-05pg5bahtb5g3p8gm539k45nijlnjdpi.apps.googleusercontent.com'; /* Desktop app Client ID */
+                } else {
+                    window.APP_CONFIG.clientId = '35324134118-oit317sdim38b1h0pbmje25j8dfs10jo.apps.googleusercontent.com'; /* Web app Client ID */
                 }
 
                 /* Use the configuration defined at the top of the script */
@@ -491,10 +524,6 @@
         }
 
 
-        /* Show initialization error */
-        function showInitializationError(message) {
-            showError('Initialization Error', message);
-        }
 
         /* Error Handling Functions */
         function showError(title, message) {
@@ -543,10 +572,7 @@
             }
         }
 
-        /* Show initialization error */
-        function showInitializationError(message) {
-            showError('Initialization Error', message);
-        }
+
 
         /* Show info notification */
         function showInfo(title, message) {
@@ -706,6 +732,7 @@
             }
         }
 
+
         /* Offline Storage */
         const OfflineStorage = {
             savePendingTransaction(transaction) {
@@ -749,127 +776,9 @@
             }
         };
 
-        /* Update Pending Badge */
-        function updatePendingBadge() {
-            const badge = document.querySelector('.pending-badge');
-            if (!badge) return;
 
-            const pending = OfflineStorage.getPendingTransactions();
-            badge.textContent = pending.length;
-            badge.style.display = pending.length > 0 ? 'block' : 'none';
-        }
 
-        /* Clear Form */
-        function clearForm() {
-            const inputText = document.getElementById('inputText');
-            if (inputText) inputText.value = '';
-
-            window.transactions = [];
-            window.currentTransactionIndex = 0;
-
-            const editableContainer = document.getElementById('editableContainer');
-            if (editableContainer) editableContainer.innerHTML = '';
-
-            const livePreview = document.querySelector('.live-preview');
-            if (livePreview) livePreview.classList.remove('show');
-
-            updateTransactionCounter();
-        }
-
-        /* Update Transaction Counter */
-        function updateTransactionCounter() {
-            const indicator = document.querySelector('.transaction-indicator');
-            const prevBtn = document.getElementById('prevTransaction');
-            const nextBtn = document.getElementById('nextTransaction');
-
-            if (!indicator || !prevBtn || !nextBtn) return;
-
-            if (window.transactions && window.transactions.length > 0) {
-                indicator.textContent = `${window.currentTransactionIndex + 1} of ${window.transactions.length}`;
-                prevBtn.disabled = window.currentTransactionIndex === 0;
-                nextBtn.disabled = window.currentTransactionIndex === window.transactions.length - 1;
-            } else {
-                indicator.textContent = 'No Transactions';
-                prevBtn.disabled = true;
-                nextBtn.disabled = true;
-            }
-        }
-
-        /* Transaction Navigation */
-        function navigateTransaction(direction) {
-            const newIndex = window.currentTransactionIndex + direction;
-            if (newIndex >= 0 && newIndex < window.transactions.length) {
-                window.currentTransactionIndex = newIndex;
-                displayEditableFields(window.transactions[newIndex]);
-                updateTransactionCounter();
-            }
-        }
-
-        /* Transaction Editing */
-        function editTransaction(index) {
-            if (index >= 0 && index < window.transactions.length) {
-                window.currentTransactionIndex = index;
-                displayEditableFields(window.transactions[index]);
-                updateTransactionCounter();
-                closeTransactionReview();
-            }
-        }
-
-        function removeTransaction(index) {
-            if (confirm('Are you sure you want to remove this transaction?')) {
-                window.transactions.splice(index, 1);
-                if (window.currentTransactionIndex >= window.transactions.length) {
-                    window.currentTransactionIndex = Math.max(0, window.transactions.length - 1);
-                }
-                if (window.transactions.length > 0) {
-                    displayEditableFields(window.transactions[window.currentTransactionIndex]);
-                } else {
-                    document.getElementById("editableContainer").innerHTML = "";
-                }
-                updateTransactionCounter();
-                closeTransactionReview();
-                if (window.transactions.length > 0) {
-                    showTransactionReview();
-                }
-            }
-        }
-
-        /* Bootstrap application */
-        async function bootstrapApp() {
-            /* Check for required elements first without showing loading */
-            const requiredElements = [
-                '#inputText',
-                '.error-close',
-                '.edit-overlay',
-                '.container',
-                '#editableContainer',
-                '.edit-modal',
-                '.loading-overlay'
-            ];
-
-            const missingElements = requiredElements.filter(selector =>
-                !document.querySelector(selector)
-            );
-
-            if (missingElements.length > 0) {
-                console.error('Missing required elements:', missingElements);
-                showInitializationError(`Missing required elements: ${missingElements.join(', ')}`);
-                return;
-            }
-
-            /* Initialize if not already done */
-            if (!isInitialized && !isInitializing) {
-                try {
-                    await initializeApp();
-                } catch (error) {
-                    console.error('Failed to initialize app:', error);
-                    showInitializationError(error.message);
-                    hideLoading();
-                }
-            }
-        }
-
-        /* Bootstrap the application */
+        /* Inistialize the application */
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initializeApp);
         } else {
@@ -1290,17 +1199,6 @@
             }
         };
 
-        function hideLoading() {
-            loadingCount = Math.max(0, loadingCount - 1);
-            const overlay = document.querySelector('.loading-overlay');
-            if (overlay && loadingCount === 0) {
-                overlay.style.display = 'none';
-                if (loadingTimeout) {
-                    clearTimeout(loadingTimeout);
-                    loadingTimeout = null;
-                }
-            }
-        }
 
         /* Modal Management */
         const ModalManager = {
@@ -1358,107 +1256,11 @@
             }
         };
 
-        /* Close modals */
-        window.closeEditModal = function () {
-            document.querySelector('.edit-modal').classList.remove('show');
-            document.querySelector('.edit-overlay').classList.remove('show');
-        };
-
-        window.closeTransactionReview = function () {
-            const modal = document.querySelector('.edit-modal.show');
-            if (modal) modal.remove();
-            document.querySelector('.edit-overlay').classList.remove('show');
-        };
-
-        window.closePendingTransactions = function () {
-            const modal = document.querySelector('.edit-modal.show');
-            if (modal) modal.remove();
-            document.querySelector('.edit-overlay').classList.remove('show');
-        };
-
-        /* Save edit */
-        window.saveEdit = function () {
-            const modal = document.querySelector('.edit-modal');
-            const input = modal.querySelector('.editable-input, .editable-select');
-
-            if (input && ModalManager.currentField && window.transactions[window.currentTransactionIndex]) {
-                window.transactions[window.currentTransactionIndex][ModalManager.currentField] = input.value;
-                displayEditableFields(window.transactions[window.currentTransactionIndex]);
-            }
-
-            closeEditModal();
-        };
-
+        
         /* Submit online */
         async function submitOnline() {
             await submitTransaction();
             closeTransactionReview();
-        }
-
-        /* Submit pending transaction */
-        async function submitPendingTransaction(id) {
-            try {
-                showLoading();
-                const pending = OfflineStorage.getPendingTransactions();
-                const transaction = pending.find(t => t.id === id);
-
-                if (!transaction) {
-                    throw new Error('Transaction not found');
-                }
-
-                window.transactions = [transaction];
-                window.currentTransactionIndex = 0;
-
-                await submitTransaction();
-                OfflineStorage.removePendingTransaction(id);
-
-                const remaining = OfflineStorage.getPendingTransactions();
-                closePendingTransactions();
-                if (remaining.length > 0) {
-                    showPendingTransactions();
-                }
-            } catch (error) {
-                console.error('Submit pending transaction error:', error);
-                showError('Submit Error', 'Failed to submit transaction. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        /* Submit all pending transactions */
-        async function submitAllPending() {
-            try {
-                showLoading();
-                const pending = OfflineStorage.getPendingTransactions();
-                let successCount = 0;
-
-                for (const transaction of pending) {
-                    try {
-                        window.transactions = [transaction];
-                        window.currentTransactionIndex = 0;
-                        await submitTransaction();
-                        OfflineStorage.removePendingTransaction(transaction.id);
-                        successCount++;
-                    } catch (error) {
-                        console.error('Failed to submit transaction:', error);
-                    }
-                }
-
-                closePendingTransactions();
-                if (successCount > 0) {
-                    showSuccess(`Successfully submitted ${successCount} transaction${successCount > 1 ? 's' : ''}`);
-                }
-
-                const remaining = OfflineStorage.getPendingTransactions();
-                if (remaining.length > 0) {
-                    showPendingTransactions();
-                }
-            } catch (error) {
-                console.error('Submit all pending error:', error);
-                showError('Submit Error', 'Failed to submit all transactions. Some may need to be retried.');
-            } finally {
-                hideLoading();
-            }
         }
 
 
@@ -1578,11 +1380,6 @@
             closeEditModal();
         };
 
-        /* Submit online */
-        async function submitOnline() {
-            await submitTransaction();
-            closeTransactionReview();
-        }
 
         /* Submit pending transaction */
         async function submitPendingTransaction(id) {
@@ -3336,7 +3133,7 @@
 </head>
 
 <body>
-    <div class="loading-overlay" style="display:none">
+    <div class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
     <div class="error-notification">
@@ -3387,7 +3184,10 @@
         </div>
     </div>
 
-
+    <!-- Load GIS Client Library -->
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <!-- Load GAPI Client Library -->
+    <script src="https://apis.google.com/js/api.js"></script>
 </body>
 
 </html>
