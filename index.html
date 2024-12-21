@@ -105,6 +105,9 @@
             });
         }
 
+
+
+        
         /* Initialize the GIS client */
         async function initGIS() {
             return new Promise((resolve, reject) => {
@@ -119,25 +122,25 @@
                     window.gisClient = google.accounts.oauth2.initTokenClient({
                         client_id: window.APP_CONFIG.clientId,
                         scope: window.APP_CONFIG.scope,
-                        ux_mode: isLocalhost ? 'popup' : 'redirect', /* Set ux_mode */
+                        ux_mode: isLocalhost ? 'popup' : 'redirect',
                         callback: async (tokenResponse) => {
                             clearTimeout(timeoutId);
+
                             if (tokenResponse && tokenResponse.access_token) {
                                 console.log('GIS client initialized and token received');
-
                                 /* Initialize GAPI client after receiving token */
                                 try {
                                     await initializeGapiClient();
+
                                     gapi.client.setToken(tokenResponse);
                                     isInitialized = true;
                                     gisLoaded = true;
                                     resolve();
                                 } catch (err) {
                                     console.error('Failed to initialize GAPI client after token:', err);
-                                    showError('Authentication Error', 'Failed to initialize GAPI after authentication.', err);
+                                    showError('Authentication Error', 'Failed to initialize GAPI after authentication.');
                                     reject(err);
                                 }
-
                             } else {
                                 console.error('Failed to get access token', tokenResponse);
                                 showError('Authentication Error', `Failed to get access token: ${tokenResponse.error} : ${tokenResponse.error_description}`);
@@ -162,7 +165,6 @@
                 }
             });
         }
-
 
         /* Load Google API and GIS client libraries */
         async function loadGoogleAPIs() {
@@ -209,6 +211,7 @@
             });
         }
 
+
         /* Handle sign-in */
         async function handleSignIn() {
             return new Promise((resolve) => {
@@ -235,7 +238,7 @@
                 let requestOptions = {};
 
                 /* Determine if running locally or online */
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '') {
                     /* Local environment: Use select_account prompt for Desktop App credentials */
                     requestOptions.prompt = 'select_account';
                 } else {
@@ -246,7 +249,7 @@
                 /* Request token with GIS client */
                 window.gisClient.requestAccessToken(requestOptions, (response) => {
                     clearTimeout(timeoutId); /* Clear the timeout */
-                    hideLoading();
+                    hideLoading(); /* Hide loading indicator */
                     if (response.error) {
                         console.error('Sign-in error:', response.error);
                         showError('Authentication Error', `Sign-in failed: ${response.error}`);
@@ -258,6 +261,8 @@
                 });
             });
         }
+
+
 
         /* Initialize application */
         async function initializeApp() {
