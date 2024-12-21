@@ -72,29 +72,29 @@
                             discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
                         });
                         /* Now, attempt authentication *after* gapi.client is initialized */
-                gapi.auth2.getAuthInstance().signIn().then(
-                    (googleUser) => {
-                        clearTimeout(timeoutId);
-                        const id_token = googleUser.getAuthResponse().id_token;
+                        gapi.auth2.getAuthInstance().signIn().then(
+                            (googleUser) => {
+                                clearTimeout(timeoutId);
+                                const id_token = googleUser.getAuthResponse().id_token;
 
-                        if (id_token) {
-                            console.log('GIS client initialized and token received');
-                            gapi.client.setToken({id_token}); /* Use id_token instead of access_token */
-                            isInitialized = true;
-                            resolve();
-                        } else {
-                            console.error('Failed to get ID token');
-                            
-                            reject(new Error('Failed to get ID token'));
-                        }
-                    },
-                    (error) => {
-                        clearTimeout(timeoutId);
-                        console.error('Authentication error', error);
-                        
-                        reject(new Error('Authentication failed'));
-                    }
-                );
+                                if (id_token) {
+                                    console.log('GIS client initialized and token received');
+                                    gapi.client.setToken({ id_token }); /* Use id_token instead of access_token */
+                                    isInitialized = true;
+                                    resolve();
+                                } else {
+                                    console.error('Failed to get ID token');
+
+                                    reject(new Error('Failed to get ID token'));
+                                }
+                            },
+                            (error) => {
+                                clearTimeout(timeoutId);
+                                console.error('Authentication error', error);
+
+                                reject(new Error('Authentication failed'));
+                            }
+                        );
                         gapiLoaded = true;
                         resolve();
                     } catch (error) {
@@ -107,62 +107,61 @@
 
         /* Initialize the GIS client */
         async function initGIS() {
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            console.error('GIS initialization timed out');
-            showError('Authentication Error', 'GIS Initialization timed out.');
-            reject(new Error('GIS initialization timed out'));
-        }, 10000);
+            return new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    console.error('GIS initialization timed out');
+                    showError('Authentication Error', 'GIS Initialization timed out.');
+                    reject(new Error('GIS initialization timed out'));
+                }, 10000);
 
-        try {
-            console.log('Initializing GIS client...');
-             window.gisClient = google.accounts.oauth2.initTokenClient({
-                  client_id: window.APP_CONFIG.clientId,
-                    scope: window.APP_CONFIG.scope,
-                    ux_mode: isLocalhost ? 'popup' : 'redirect', /* Set ux_mode */
-                    callback: async (tokenResponse) => {
+                try {
+                    console.log('Initializing GIS client...');
+                    window.gisClient = google.accounts.oauth2.initTokenClient({
+                        client_id: window.APP_CONFIG.clientId,
+                        scope: window.APP_CONFIG.scope,
+                        ux_mode: isLocalhost ? 'popup' : 'redirect', /* Set ux_mode */
+                        callback: async (tokenResponse) => {
+                            clearTimeout(timeoutId);
+                            if (tokenResponse && tokenResponse.access_token) {
+                                console.log('GIS client initialized and token received');
+
+                                /* Initialize GAPI client after receiving token */
+                                try {
+                                    await initializeGapiClient();
+                                    gapi.client.setToken(tokenResponse);
+                                    isInitialized = true;
+                                    gisLoaded = true;
+                                    resolve();
+                                } catch (err) {
+                                    console.error('Failed to initialize GAPI client after token:', err);
+                                    showError('Authentication Error', 'Failed to initialize GAPI after authentication.', err);
+                                    reject(err);
+                                }
+
+                            } else {
+                                console.error('Failed to get access token', tokenResponse);
+                                showError('Authentication Error', `Failed to get access token: ${tokenResponse.error} : ${tokenResponse.error_description}`);
+                                reject(new Error('Failed to get access token'));
+                            }
+                        },
+                        error_callback: (error) => {
+                            clearTimeout(timeoutId);
+                            console.error('GIS client error:', error);
+                            showError('Authentication Error', `GIS client error: ${error.message || error}`);
+                            reject(error);
+                        }
+                    });
+
+                    console.log('GIS client initialization started');
+                    resolve();
+                } catch (error) {
                     clearTimeout(timeoutId);
-                    if (tokenResponse && tokenResponse.access_token) {
-                        console.log('GIS client initialized and token received');
-                        
-                        /* Initialize GAPI client after receiving token */
-                        try{
-                          await initializeGapiClient();
-
-                           gapi.client.setToken(tokenResponse);
-                            isInitialized = true;
-                            gisLoaded = true;
-                            resolve();
-                         } catch(err) {
-                             console.error('Failed to initialize GAPI client after token:', error);
-                             showError('Authentication Error', 'Failed to initialize GAPI after authentication.');
-                             reject(err);
-                         }
-
-                    } else {
-                        console.error('Failed to get access token', tokenResponse);
-                        showError('Authentication Error', `Failed to get access token: ${tokenResponse.error} : ${tokenResponse.error_description}`);
-                        reject(new Error('Failed to get access token'));
-                    }
-                },
-                error_callback: (error) => {
-                    clearTimeout(timeoutId);
-                    console.error('GIS client error:', error);
-                    showError('Authentication Error', `GIS client error: ${error.message || error}`);
+                    console.error('Failed to initialize GIS client:', error);
+                    showError('Authentication Error', 'Failed to initialize GIS client.');
                     reject(error);
                 }
-             });
-        
-            console.log('GIS client initialization started');
-            resolve();
-        } catch (error) {
-            clearTimeout(timeoutId);
-            console.error('Failed to initialize GIS client:', error);
-            showError('Authentication Error', 'Failed to initialize GIS client.');
-            reject(error);
+            });
         }
-    });
-}
 
 
         /* Load Google API and GIS client libraries */
