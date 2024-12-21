@@ -789,6 +789,7 @@
         function processInput() {
             const inputText = document.getElementById("inputText").value;
             const livePreview = document.querySelector('.live-preview');
+            const collapsibleSection = document.querySelector('.collapsible-section');
 
             try {
                 if (!inputText.trim()) {
@@ -802,26 +803,45 @@
 
                 const analysis = analyzeTextContext(inputText.trim());
 
-
                 livePreview.innerHTML = `
-                    <div class="confidence-indicator confidence-${getConfidenceLevel(analysis.confidence)}">
-                        ${analysis.amount ? analysis.amount.toLocaleString() + ' Tsh' : 'No amount detected'} • 
-                        ${analysis.category} • 
-                        ${analysis.confidence}% confident
-                    </div>
-                    <div class="feedback-buttons">
-                        <button onclick="provideFeedback(true)" class="feedback-button positive" title="Correct Analysis">✓</button>
-                        <button onclick="provideFeedback(false)" class="feedback-button negative" title="Incorrect Analysis">✗</button>
+                    <div class="preview-content">
+                        <div class="preview-main">
+                            <div class="amount-display">
+                                ${analysis.amount ? analysis.amount.toLocaleString() + ' Tsh' : 'No amount detected'}
+                            </div>
+                            <div class="preview-details">
+                                <div class="category-tag">
+                                    <span class="tag-icon">🏷️</span> ${analysis.category}
+                                </div>
+                                <div class="paid-to-tag">
+                                    <span class="tag-icon">👤</span> ${analysis.paidTo}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="preview-footer">
+                            <div class="confidence-indicator confidence-${getConfidenceLevel(analysis.confidence)}">
+                                <span class="confidence-dot"></span>
+                                ${analysis.confidence}% confident
+                            </div>
+                            <div class="feedback-buttons">
+                                <button onclick="provideFeedback(true)" class="feedback-button positive" title="Correct Analysis">✓</button>
+                                <button onclick="provideFeedback(false)" class="feedback-button negative" title="Incorrect Analysis">✗</button>
+                            </div>
+                        </div>
                     </div>
                 `;
                 livePreview.classList.add('show');
+                
+                /* Add click event listener to the live preview */
+                livePreview.onclick = toggleCollapsible;
 
+                /* Ensure the section is expanded when new input is processed */
+                collapsibleSection.classList.remove('collapsed');
 
                 window.currentAnalysis = {
                     input: inputText.trim(),
                     analysis: analysis
                 };
-
 
                 const transaction = {
                     "Date of Transaction": new Date().toISOString().split("T")[0],
@@ -1445,6 +1465,19 @@
             } finally {
                 hideLoading();
             }
+        }
+
+
+        /* Add this JavaScript right after the processInput() function: */
+
+        function toggleCollapsible(event) {
+            /* Don't toggle if clicking feedback buttons */
+            if (event.target.closest('.feedback-buttons')) {
+                return;
+            }
+            
+            const section = document.querySelector('.collapsible-section');
+            section.classList.toggle('collapsed');
         }
     </script>
 
@@ -3129,6 +3162,206 @@
                 bottom: 80px;
             }
         }
+        .collapsible-section {
+            margin-bottom: 12px;
+        }
+
+        .collapsible-header {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .collapsible-header:hover {
+            background: var(--bg-card);
+        }
+
+        .collapsible-header::after {
+            content: '▼';
+            float: right;
+            transition: transform 0.3s ease;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .collapsible-section.collapsed .collapsible-header::after {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-content {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .collapsible-section.collapsed .collapsible-content {
+            max-height: 0;
+        }
+
+        /* Update the live-preview styles */
+        .live-preview {
+            background: var(--bg-input);
+            border-radius: 8px 8px 0 0;
+            padding: 12px;
+            font-size: 14px;
+            color: var(--text-light);
+            display: none;
+        }
+
+        .live-preview.show {
+            display: block;
+        }
+
+        .collapsible-section.collapsed .live-preview {
+            border-radius: 8px;
+        }
+
+        .preview-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .preview-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .amount-display {
+            font-size: 1.4em;
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        .preview-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .category-tag,
+        .paid-to-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: var(--bg-card);
+            border-radius: 6px;
+            font-size: 0.9em;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tag-icon {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .preview-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 8px;
+            border-top: 1px solid var(--bg-card);
+        }
+
+        .confidence-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+
+        .confidence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .confidence-high {
+            color: #4CAF50;
+        }
+
+        .confidence-medium {
+            color: #FFC107;
+        }
+
+        .confidence-low {
+            color: #FF5722;
+        }
+
+        .feedback-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .feedback-button {
+            background: var(--bg-card);
+            border: none;
+            color: var(--text-light);
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+
+        .feedback-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .feedback-button.positive:hover {
+            background: #4CAF50;
+        }
+
+        .feedback-button.negative:hover {
+            background: #FF5722;
+        }
+
+        /* Update mobile styles */
+        @media screen and (max-width: 480px) {
+            .preview-main {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .preview-details {
+                width: 100%;
+            }
+
+            .category-tag,
+            .paid-to-tag {
+                width: 100%;
+            }
+        }
+
+        /* Update the collapsible header styles */
+        .collapsible-header::after {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: transform 0.3s ease;
+        }
+
+        .collapsible-section.collapsed .collapsible-header::after {
+            transform: translateY(-50%) rotate(-90deg);
+        }
+
+        .live-preview {
+            position: relative;
+            padding: 16px;
+        }
+
     </style>
 </head>
 
@@ -3146,8 +3379,10 @@
     <div class="container">
         <h1>ExpenSphere <span class="version">v0.0.29</span></h1>
         <div class="results-section">
-            <div class="live-preview"></div>
-            <div id="editableContainer" class="editable-container"></div>
+            <div class="collapsible-section">
+                <div class="live-preview collapsible-header"></div>
+                <div id="editableContainer" class="editable-container collapsible-content"></div>
+            </div>
             <div class="transaction-navigation">
                 <button class="nav-button" id="prevTransaction" disabled onclick="navigateTransaction(-1)">←</button>
                 <span class="transaction-indicator">No Transactions</span>
