@@ -33,8 +33,8 @@
 
 
 
-         /* Load a script dynamically, with caching check */
-         function loadScript(src) {
+        /* Load a script dynamically, with caching check */
+        function loadScript(src) {
             return new Promise((resolve, reject) => {
                 /* Check if the script is already loaded */
                 if (document.querySelector(`script[src="${src}"]`)) {
@@ -103,7 +103,47 @@
 
         /* Handle sign-in */
         async function handleSignIn() {
-            return new Promise((resolve,reject) => {
+            return new Promise((resolve, reject) => {
+
+                /* Check for token in memory */
+                if (window.accessToken && window.accessToken.token) {
+                    const currentTime = Date.now();
+
+                    if (window.accessToken.expiresAt > currentTime) {
+                        console.log('Using in-memory access token.');
+                        gapi.client.setToken({ access_token: window.accessToken.token });
+                        resolve(true);
+                        return;
+                    } else {
+                        console.log('In-memory token has expired. requesting new token silently');
+                        /* Clear the expired token */
+                        window.accessToken = null;
+                        localStorage.removeItem('google_access_token');
+
+                    }
+                }
+
+                /* Token not in memory or expired, check localStorage */
+                const cachedTokenString = localStorage.getItem('google_access_token');
+                if (cachedTokenString) {
+                    const cachedToken = JSON.parse(cachedTokenString);
+                    const currentTime = Date.now();
+
+                    if (cachedToken.expiresAt > currentTime) {
+                        console.log('Loaded token from localStorage.');
+                        /* Restore token to memory */
+                        window.accessToken = cachedToken;
+                        gapi.client.setToken({ access_token: window.accessToken.token });
+                        resolve(true);
+                        return;
+                    } else {
+                        console.log('Token in localStorage has expired.');
+                        /* Remove expired token */
+                        localStorage.removeItem('google_access_token');
+                    }
+                }
+
+
                 console.log("Attempting to sign in...");
 
                 if (!window.gisClient) {
@@ -116,9 +156,9 @@
                 window.handleSignInResolve = resolve;
                 window.handleSignInReject = reject;
 
-                /* Request access token without a callback */
+                /* Request access token without a prompt */
                 window.gisClient.requestAccessToken({
-                    prompt: 'consent' /* or '' based on your requirements */
+                    prompt: '' /* or '' based on your requirements */
                 });
 
             });
@@ -137,6 +177,19 @@
             } else {
                 console.log('Token received', tokenResponse);
                 gapi.client.setToken(tokenResponse);
+
+                /* Store the token in memory */
+                const expiresIn = tokenResponse.expires_in || 3600; /* Default to 1 hour if not provided */
+                const accessTokenExpiry = Date.now() + (expiresIn * 1000);
+                const tokenData = {
+                    token: tokenResponse.access_token,
+                    expiresAt: accessTokenExpiry
+                };
+
+                /* Store in memory */
+                window.accessToken = tokenData;
+                /* Backup in localStorage */
+                localStorage.setItem('google_access_token', JSON.stringify(tokenData));
 
                 if (window.handleSignInResolve) {
                     window.handleSignInResolve(true);
@@ -218,6 +271,10 @@
                 /* Load Google APIs before app initialization */
                 await loadGoogleAPIs();
 
+                /* Attempt to silently authenticate using in-memory token */
+                await handleSignIn();
+
+
                 /* Focus on input */
                 inputTextArea.focus();
 
@@ -235,6 +292,15 @@
             }
         }
 
+        function clearGoogleCredentials() {
+            /* Clear the access token from memory and localStorage */
+            window.accessToken = null;
+            localStorage.removeItem('google_access_token');
+            gapi.client.setToken(null);
+            console.log('Credentials cleared.');
+            showSuccess('Signed out successfully.');
+        }
+
         async function submitTransaction() {
             if (!window.transactions || window.transactions.length === 0) {
                 showError("No Transaction", "Please enter a transaction first.");
@@ -248,6 +314,18 @@
                 const signedIn = await handleSignIn();
                 if (!signedIn) {
                     throw new Error('auth_required');
+                }
+
+                /* Re-check the token before making API calls */
+                const currentTime = Date.now();
+                if (!window.accessToken || window.accessToken.expiresAt <= currentTime) {
+                    console.log('Token expired during operation, requesting new token.');
+                    window.accessToken = null;
+                    /* Request a new token */
+                    const renewed = await handleSignIn();
+                    if (!renewed) {
+                        throw new Error('auth_required');
+                    }
                 }
 
                 let submittedCount = 0;
@@ -319,16 +397,16 @@
                     }
                     console.log("Requesting access token...");
 
-     /* Store resolve and reject functions globally */
-     window.handleSignInResolve = resolve;
-            window.handleSignInReject = reject;
+                    /* Store resolve and reject functions globally */
+                    window.handleSignInResolve = resolve;
+                    window.handleSignInReject = reject;
 
                     /* Determine the prompt mode based on the environment */
                     let promptOption = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'select_account' : '';
 
                     window.gisClient.requestAccessToken({
                         prompt: promptOption /* Use the determined prompt mode */
-                        
+
                     });
                 } catch (error) {
                     console.error('Error requesting access token:', error);
