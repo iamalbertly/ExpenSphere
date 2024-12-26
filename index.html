@@ -33,8 +33,8 @@
 
 
 
-        /* Load a script dynamically, with caching check */
-        function loadScript(src) {
+         /* Load a script dynamically, with caching check */
+         function loadScript(src) {
             return new Promise((resolve, reject) => {
                 /* Check if the script is already loaded */
                 if (document.querySelector(`script[src="${src}"]`)) {
@@ -56,42 +56,23 @@
         /* Function to initialize the GIS client */
         async function initGIS() {
             return new Promise((resolve, reject) => {
-                const timeoutId = setTimeout(() => {
-                    console.error('GIS initialization timed out');
-                    showError('Authentication Error', 'GIS Initialization timed out.');
-                    gisLoaded = false;
-                    reject(new Error('GIS initialization timed out'));
-                }, 60000);
-
                 try {
                     console.log('Initializing GIS client with ID:', window.APP_CONFIG.clientId);
                     window.gisClient = google.accounts.oauth2.initTokenClient({
                         client_id: window.APP_CONFIG.clientId,
                         scope: 'https://www.googleapis.com/auth/spreadsheets openid profile email',
-                        callback: async (tokenResponse) => {
-                            clearTimeout(timeoutId);
-                            if (tokenResponse && tokenResponse.access_token) {
-                                console.log('GIS client initialized and token received');
-                                gisLoaded = true;
-                                gapi.client.setToken(tokenResponse);
-                                resolve();
-                            } else {
-                                console.error('Failed to get access token');
-                                gisLoaded = false;
-                                reject(new Error('Failed to get access token'));
-                            }
-                        },
+                        callback: handleTokenResponse /* Assign the global callback */
                     });
-                    console.log('GIS client initialization started');
+                    console.log('GIS client initialization complete');
+                    gisLoaded = true;
+                    resolve();
                 } catch (error) {
-                    clearTimeout(timeoutId);
                     console.error('Failed to initialize GIS client:', error);
                     gisLoaded = false;
                     reject(error);
                 }
             });
         }
-
 
         /* Function to initialize the Google API Client */
         async function initializeGapiClient() {
@@ -122,7 +103,7 @@
 
         /* Handle sign-in */
         async function handleSignIn() {
-            return new Promise((resolve) => {
+            return new Promise((resolve,reject) => {
                 console.log("Attempting to sign in...");
 
                 if (!window.gisClient) {
@@ -131,31 +112,39 @@
                     resolve(false);
                     return;
                 }
+                /* Store resolve and reject functions globally */
+                window.handleSignInResolve = resolve;
+                window.handleSignInReject = reject;
 
+                /* Request access token without a callback */
                 window.gisClient.requestAccessToken({
-                    prompt: 'consent',
-                    callback: (response) => {
-                        if (response.error) {
-                            console.error('Sign-in error:', response.error);
-                            showError('Authentication Error', `Sign-in failed: ${response.error}`);
-                            resolve(false);
-                        } else {
-                            console.log('Successfully signed in')
-                            gapi.client.setToken(response);
-                            console.log("handleSignIn resolved")
-                            resolve(true);
-                        }
-                    },
-                    error_callback: (err) => {
-                        clearTimeout(timeoutId);
-                        console.error('Error during token request:', err);
-                        showError('Authentication Error', 'Error during token request.');
-                        resolve(false);
-                    }
+                    prompt: 'consent' /* or '' based on your requirements */
                 });
+
             });
         }
 
+        /* Handle the token response */
+        function handleTokenResponse(tokenResponse) {
+            if (tokenResponse.error) {
+                console.error('Error in token response:', tokenResponse.error);
+                showError('Authentication Error', 'Failed to get access token.');
+                if (window.handleSignInReject) {
+                    window.handleSignInReject(new Error(tokenResponse.error));
+                    window.handleSignInReject = null;
+                    window.handleSignInResolve = null;
+                }
+            } else {
+                console.log('Token received', tokenResponse);
+                gapi.client.setToken(tokenResponse);
+
+                if (window.handleSignInResolve) {
+                    window.handleSignInResolve(true);
+                    window.handleSignInResolve = null;
+                    window.handleSignInReject = null;
+                }
+            }
+        }
 
         /* Handle the credential response from Google */
         async function handleCredentialResponse(response) {
@@ -255,7 +244,7 @@
             try {
                 showLoading();
 
-                // Get a fresh token before submission
+                /* Get a fresh token before submission */
                 const signedIn = await handleSignIn();
                 if (!signedIn) {
                     throw new Error('auth_required');
@@ -330,26 +319,16 @@
                     }
                     console.log("Requesting access token...");
 
+     /* Store resolve and reject functions globally */
+     window.handleSignInResolve = resolve;
+            window.handleSignInReject = reject;
+
                     /* Determine the prompt mode based on the environment */
                     let promptOption = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'select_account' : '';
 
                     window.gisClient.requestAccessToken({
-                        prompt: promptOption, /* Use the determined prompt mode */
-                        callback: (response) => {
-                            if (response.error) {
-                                console.error('Error in requesting access token:', response.error);
-                                showError('Authentication Error', `Failed to request access token: ${response.error}`);
-                                reject(response.error);
-                            } else {
-                                console.log('Access token request successful:', response);
-                                resolve(response);
-                            }
-                        },
-                        error_callback: (error) => {
-                            console.error('Error requesting access token:', error);
-                            showError('Authentication Error', 'Failed to request access token.');
-                            reject(error);
-                        }
+                        prompt: promptOption /* Use the determined prompt mode */
+                        
                     });
                 } catch (error) {
                     console.error('Error requesting access token:', error);
