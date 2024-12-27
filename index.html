@@ -249,20 +249,39 @@
                 const inputTextArea = document.querySelector('#inputText');
                 if (!inputTextArea) throw new Error('Input element not found');
 
+                /* Add Enter key handler */
+                inputTextArea.addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        submitTransaction();
+                    }
+                });
+
                 /* Add character counter */
                 const charCounter = document.createElement('div');
                 charCounter.className = 'character-count';
                 inputTextArea.parentNode.appendChild(charCounter);
 
-                /* Setup event listeners */
+                /* Setup input processing with debounce */
                 let debounceTimeout = null;
                 inputTextArea.addEventListener('input', (event) => {
                     const count = event.target.value.length;
                     charCounter.textContent = `${count} characters`;
+                    
+                    /* Clear any existing timeout */
                     if (debounceTimeout) clearTimeout(debounceTimeout);
-                    debounceTimeout = setTimeout(() => processInput(), 300);
+                    
+                    /* Set a new timeout to process input */
+                    debounceTimeout = setTimeout(() => {
+                        if (event.target.value.trim()) {
+                            processInput();
+                        } else {
+                            /* Clear preview if input is empty */
+                            const livePreview = document.querySelector('.live-preview');
+                            livePreview.classList.remove('show');
+                        }
+                    }, 300); /* 300ms debounce delay */
                 });
-
 
                 /* Load configuration */
                 await loadConfiguration();
@@ -709,73 +728,76 @@
         function processInput() {
             const inputText = document.getElementById("inputText").value;
             const livePreview = document.querySelector('.live-preview');
-            const collapsibleSection = document.querySelector('.collapsible-section');
 
             try {
                 if (!inputText.trim()) {
                     document.getElementById("editableContainer").innerHTML = "";
-                    transactions = [];
-                    currentTransactionIndex = 0;
+                    window.transactions = [];
+                    window.currentTransactionIndex = 0;
                     updateTransactionCounter();
                     livePreview.classList.remove('show');
                     return;
                 }
 
-                const analysis = analyzeTextContext(inputText.trim());
+                /* Split input text into multiple transactions */
+                const transactionTexts = inputText.split(/\s*(?:&&|also)\s*/i).filter(text => text.trim());
+                window.transactions = [];
+
+                /* Process each transaction */
+                for (const transactionText of transactionTexts) {
+                    const analysis = analyzeTextContext(transactionText.trim());
+                    
+                    const transaction = {
+                        "Date of Transaction": new Date().toISOString().split("T")[0],
+                        "Where did the money come from?": "ALBERT",
+                        "How much money? (Tsh)": analysis.amount.toString(),
+                        "What's the Purchase Category": analysis.category,
+                        "Purchase Description": transactionText.trim(),
+                        "Where was the money payed to?": analysis.paidTo,
+                        "Confidence level": `${analysis.confidence}%`
+                    };
+                    
+                    window.transactions.push(transaction);
+                }
+
+                /* Show the current transaction in preview */
+                const currentTransaction = window.transactions[window.currentTransactionIndex];
+                const currentAnalysis = analyzeTextContext(currentTransaction["Purchase Description"]);
 
                 livePreview.innerHTML = `
                     <div class="preview-content">
+                        <div class="preview-date" onclick="ModalManager.showEditModal('Date of Transaction', \`${currentTransaction['Date of Transaction']}\`)">
+                            <span class="field-label">Date</span>
+                            <span class="field-value">${currentTransaction['Date of Transaction']}</span>
+                        </div>
                         <div class="preview-main">
-                            <div class="amount-display">
-                                ${analysis.amount ? analysis.amount.toLocaleString() + ' Tsh' : 'No amount detected'}
+                            <div class="amount-display" onclick="ModalManager.showEditModal('How much money? (Tsh)', \`${currentTransaction['How much money? (Tsh)']}\`)">
+                                ${parseInt(currentTransaction['How much money? (Tsh)']).toLocaleString()} Tsh
                             </div>
                             <div class="preview-details">
-                                <div class="category-tag">
-                                    <span class="tag-icon">🏷️</span> ${analysis.category}
+                                <div class="category-tag" onclick="ModalManager.showEditModal('What\'s the Purchase Category', \`${currentTransaction['What\'s the Purchase Category']}\`)">
+                                    <span class="tag-icon">🏷️</span> ${currentTransaction['What\'s the Purchase Category']}
                                 </div>
-                                <div class="paid-to-tag">
-                                    <span class="tag-icon">👤</span> ${analysis.paidTo}
+                                <div class="paid-to-tag" onclick="ModalManager.showEditModal('Where was the money payed to?', \`${currentTransaction['Where was the money payed to?']}\`)">
+                                    <span class="tag-icon">👤</span> ${currentTransaction['Where was the money payed to?']}
+                                </div>
+                                <div class="description-tag" onclick="ModalManager.showEditModal('Purchase Description', \`${currentTransaction['Purchase Description']}\`)">
+                                    <span class="tag-icon">📝</span> ${currentTransaction['Purchase Description']}
                                 </div>
                             </div>
                         </div>
                         <div class="preview-footer">
-                            <div class="confidence-indicator confidence-${getConfidenceLevel(analysis.confidence)}">
+                            <div class="confidence-indicator confidence-${getConfidenceLevel(currentAnalysis.confidence)}">
                                 <span class="confidence-dot"></span>
-                                ${analysis.confidence}% confident
+                                ${currentTransaction['Confidence level']}
                             </div>
-                            <div class="feedback-buttons">
-                                <button onclick="provideFeedback(true)" class="feedback-button positive" title="Correct Analysis">✓</button>
-                                <button onclick="provideFeedback(false)" class="feedback-button negative" title="Incorrect Analysis">✗</button>
-                            </div>
+                            <div class="validation-summary"></div>
                         </div>
                     </div>
                 `;
+
+                updatePreviewWithValidation(currentTransaction);
                 livePreview.classList.add('show');
-
-                /* Add click event listener to the live preview */
-                livePreview.onclick = toggleCollapsible;
-
-                /* Ensure the section is expanded when new input is processed */
-                collapsibleSection.classList.remove('collapsed');
-
-                window.currentAnalysis = {
-                    input: inputText.trim(),
-                    analysis: analysis
-                };
-
-                const transaction = {
-                    "Date of Transaction": new Date().toISOString().split("T")[0],
-                    "Where did the money come from?": "ALBERT",
-                    "How much money? (Tsh)": analysis.amount.toString(),
-                    "What's the Purchase Category": analysis.category,
-                    "Purchase Description": inputText.trim(),
-                    "Where was the money payed to?": analysis.paidTo,
-                    "Confidence level": `${analysis.confidence}%`
-                };
-
-                transactions = [transaction];
-                currentTransactionIndex = 0;
-                displayEditableFields(transaction);
                 updateTransactionCounter();
 
             } catch (error) {
@@ -927,13 +949,13 @@
 
         function processAndReview() {
             processInput();
-            if (transactions.length > 0) {
+            if (window.transactions.length > 0) {
                 showTransactionReview();
             }
         }
 
         function showTransactionReview() {
-            if (transactions.length === 0) {
+            if (window.transactions.length === 0) {
                 showError("No Transactions", "Please enter a transaction first.");
                 return;
             }
@@ -942,9 +964,9 @@
             modal.className = 'edit-modal show';
             modal.style.maxWidth = '800px';
             modal.innerHTML = `
-                <h3>Review Transaction${transactions.length > 1 ? 's' : ''}</h3>
+                <h3>Review Transaction${window.transactions.length > 1 ? 's' : ''}</h3>
                 <div class="transaction-review">
-                    ${transactions.map((t, i) => `
+                    ${window.transactions.map((t, i) => `
                         <div class="transaction-card">
                             <div class="transaction-header">
                                 <span class="transaction-amount">${parseInt(t["How much money? (Tsh)"]).toLocaleString()} Tsh</span>
@@ -977,7 +999,7 @@
                 </div>
                 <div class="modal-footer">
                     <div class="total-amount">
-                        Total: ${transactions.reduce((sum, t) => sum + parseInt(t["How much money? (Tsh)"]), 0).toLocaleString()} Tsh
+                        Total: ${window.transactions.reduce((sum, t) => sum + parseInt(t["How much money? (Tsh)"]), 0).toLocaleString()} Tsh
                     </div>
                     <div class="modal-actions">
                         <button onclick="submitOnline()" class="action-button primary">
@@ -1158,20 +1180,51 @@
                     }
 
                     let inputHtml = '';
-                    if (field === "What's the Purchase Category") {
-                        inputHtml = `
-                            <select class="editable-select" style="width: 100%; padding: 8px;">
-                                <option value="Groceries & Household" ${value === "Groceries & Household" ? 'selected' : ''}>Groceries & Household</option>
-                                <option value="Gift to Family & Friends" ${value === "Gift to Family & Friends" ? 'selected' : ''}>Gift to Family & Friends</option>
-                                <option value="Petrol & Transport" ${value === "Petrol & Transport" ? 'selected' : ''}>Petrol & Transport</option>
-                                <option value="Medical & Medicine" ${value === "Medical & Medicine" ? 'selected' : ''}>Medical & Medicine</option>
-                                <option value="Utilities & Bills" ${value === "Utilities & Bills" ? 'selected' : ''}>Utilities & Bills</option>
-                                <option value="Eating Out & Entertainment" ${value === "Eating Out & Entertainment" ? 'selected' : ''}>Eating Out & Entertainment</option>
-                                <option value="(OTHER) Food, Transport, Groceries, etc." ${value === "(OTHER) Food, Transport, Groceries, etc." ? 'selected' : ''}>(OTHER) Food, Transport, Groceries, etc.</option>
-                            </select>
-                        `;
-                    } else {
-                        inputHtml = `<input type="text" class="editable-input" value="${(value || '').replace(/"/g, '"')}" style="width: 100%; padding: 8px;">`;
+                    switch (field) {
+                        case 'Date of Transaction':
+                            inputHtml = `
+                                <input type="date" 
+                                    class="editable-input" 
+                                    value="${value}"
+                                    style="width: 100%; padding: 8px;">
+                            `;
+                            break;
+
+                        case "What's the Purchase Category":
+                            inputHtml = `
+                                <select class="editable-select" style="width: 100%; padding: 8px;">
+                                    <option value="Groceries & Household" ${value === "Groceries & Household" ? 'selected' : ''}>Groceries & Household</option>
+                                    <option value="Gift to Family & Friends" ${value === "Gift to Family & Friends" ? 'selected' : ''}>Gift to Family & Friends</option>
+                                    <option value="Petrol & Transport" ${value === "Petrol & Transport" ? 'selected' : ''}>Petrol & Transport</option>
+                                    <option value="Medical & Medicine" ${value === "Medical & Medicine" ? 'selected' : ''}>Medical & Medicine</option>
+                                    <option value="Utilities & Bills" ${value === "Utilities & Bills" ? 'selected' : ''}>Utilities & Bills</option>
+                                    <option value="Eating Out & Entertainment" ${value === "Eating Out & Entertainment" ? 'selected' : ''}>Eating Out & Entertainment</option>
+                                    <option value="(OTHER) Food, Transport, Groceries, etc." ${value === "(OTHER) Food, Transport, Groceries, etc." ? 'selected' : ''}>(OTHER) Food, Transport, Groceries, etc.</option>
+                                </select>
+                            `;
+                            break;
+
+                        case "How much money? (Tsh)":
+                            inputHtml = `
+                                <div class="amount-input-wrapper">
+                                    <input type="number" 
+                                        class="editable-input" 
+                                        value="${parseInt(value) || ''}"
+                                        min="0"
+                                        step="1000"
+                                        style="width: 100%; padding: 8px;">
+                                    <span class="currency-label">Tsh</span>
+                                </div>
+                            `;
+                            break;
+
+                        default:
+                            inputHtml = `
+                                <input type="text" 
+                                    class="editable-input" 
+                                    value="${value || ''}"
+                                    style="width: 100%; padding: 8px;">
+                            `;
                     }
 
                     content.innerHTML = inputHtml;
@@ -1255,7 +1308,9 @@
             const newIndex = window.currentTransactionIndex + direction;
             if (newIndex >= 0 && newIndex < window.transactions.length) {
                 window.currentTransactionIndex = newIndex;
-                displayEditableFields(window.transactions[newIndex]);
+                const currentTransaction = window.transactions[newIndex];
+                /* Update preview with the new transaction */
+                processInput();
                 updateTransactionCounter();
             }
         }
@@ -1399,6 +1454,170 @@
             const section = document.querySelector('.collapsible-section');
             section.classList.toggle('collapsed');
         }
+
+        function validateTransaction(transaction) {
+            const issues = [];
+            
+            if (!transaction["How much money? (Tsh)"] || parseInt(transaction["How much money? (Tsh)"]) <= 0) {
+                issues.push('amount');
+            }
+            
+            if (!transaction["What's the Purchase Category"] || 
+                transaction["What's the Purchase Category"] === "(OTHER) Food, Transport, Groceries, etc.") {
+                issues.push('category');
+            }
+            
+            if (!transaction["Where was the money payed to?"]) {
+                issues.push('paidTo');
+            }
+            
+            if (!transaction["Purchase Description"]) {
+                issues.push('description');
+            }
+            
+            return {
+                isValid: issues.length === 0,
+                issues
+            };
+        }
+
+        function updatePreviewWithValidation(transaction) {
+            const validation = validateTransaction(transaction);
+            const livePreview = document.querySelector('.live-preview');
+            const previewContent = livePreview.querySelector('.preview-content');
+            
+            previewContent.classList.toggle('incomplete', !validation.isValid);
+            
+            /* Update amount display */
+            const amountDisplay = previewContent.querySelector('.amount-display');
+            amountDisplay.classList.toggle('incomplete', validation.issues.includes('amount'));
+            
+            /* Update category tag */
+            const categoryTag = previewContent.querySelector('.category-tag');
+            categoryTag.classList.toggle('tag-incomplete', validation.issues.includes('category'));
+            
+            /* Update paid-to tag */
+            const paidToTag = previewContent.querySelector('.paid-to-tag');
+            paidToTag.classList.toggle('tag-incomplete', validation.issues.includes('paidTo'));
+            
+            /* Update description tag */
+            const descriptionTag = previewContent.querySelector('.description-tag');
+            descriptionTag.classList.toggle('tag-incomplete', validation.issues.includes('description'));
+            
+            /* Update validation summary */
+            const validationSummary = previewContent.querySelector('.validation-summary');
+            if (validation.issues.length > 0) {
+                const missingFields = validation.issues.map(issue => {
+                    switch(issue) {
+                        case 'amount': return 'valid amount';
+                        case 'category': return 'specific category';
+                        case 'paidTo': return 'recipient';
+                        case 'description': return 'description';
+                        default: return issue;
+                    }
+                }).join(', ');
+                validationSummary.textContent = `Missing: ${missingFields}`;
+                validationSummary.classList.add('show');
+            } else {
+                validationSummary.classList.remove('show');
+            }
+        }
+
+        /* Update the processInput function to include validation */
+        function processInput() {
+            const inputText = document.getElementById("inputText").value;
+            const livePreview = document.querySelector('.live-preview');
+
+            try {
+                if (!inputText.trim()) {
+                    document.getElementById("editableContainer").innerHTML = "";
+                    window.transactions = [];
+                    window.currentTransactionIndex = 0;
+                    updateTransactionCounter();
+                    livePreview.classList.remove('show');
+                    return;
+                }
+
+                /* Split input text into multiple transactions */
+                const transactionTexts = inputText.split(/\s*(?:&&|also)\s*/i).filter(text => text.trim());
+                window.transactions = [];
+
+                /* Process each transaction */
+                for (const transactionText of transactionTexts) {
+                    const analysis = analyzeTextContext(transactionText.trim());
+                    
+                    const transaction = {
+                        "Date of Transaction": new Date().toISOString().split("T")[0],
+                        "Where did the money come from?": "ALBERT",
+                        "How much money? (Tsh)": analysis.amount.toString(),
+                        "What's the Purchase Category": analysis.category,
+                        "Purchase Description": transactionText.trim(),
+                        "Where was the money payed to?": analysis.paidTo,
+                        "Confidence level": `${analysis.confidence}%`
+                    };
+                    
+                    window.transactions.push(transaction);
+                }
+
+                /* Show the current transaction in preview */
+                const currentTransaction = window.transactions[window.currentTransactionIndex];
+                const currentAnalysis = analyzeTextContext(currentTransaction["Purchase Description"]);
+
+                livePreview.innerHTML = `
+                    <div class="preview-content">
+                        <div class="preview-date" onclick="ModalManager.showEditModal('Date of Transaction', \`${currentTransaction['Date of Transaction']}\`)">
+                            <span class="field-label">Date</span>
+                            <span class="field-value">${currentTransaction['Date of Transaction']}</span>
+                        </div>
+                        <div class="preview-main">
+                            <div class="amount-display" onclick="ModalManager.showEditModal('How much money? (Tsh)', \`${currentTransaction['How much money? (Tsh)']}\`)">
+                                ${parseInt(currentTransaction['How much money? (Tsh)']).toLocaleString()} Tsh
+                            </div>
+                            <div class="preview-details">
+                                <div class="category-tag" onclick="ModalManager.showEditModal('What\'s the Purchase Category', \`${currentTransaction['What\'s the Purchase Category']}\`)">
+                                    <span class="tag-icon">🏷️</span> ${currentTransaction['What\'s the Purchase Category']}
+                                </div>
+                                <div class="paid-to-tag" onclick="ModalManager.showEditModal('Where was the money payed to?', \`${currentTransaction['Where was the money payed to?']}\`)">
+                                    <span class="tag-icon">👤</span> ${currentTransaction['Where was the money payed to?']}
+                                </div>
+                                <div class="description-tag" onclick="ModalManager.showEditModal('Purchase Description', \`${currentTransaction['Purchase Description']}\`)">
+                                    <span class="tag-icon">📝</span> ${currentTransaction['Purchase Description']}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="preview-footer">
+                            <div class="confidence-indicator confidence-${getConfidenceLevel(currentAnalysis.confidence)}">
+                                <span class="confidence-dot"></span>
+                                ${currentTransaction['Confidence level']}
+                            </div>
+                            <div class="validation-summary"></div>
+                        </div>
+                    </div>
+                `;
+
+                updatePreviewWithValidation(currentTransaction);
+                livePreview.classList.add('show');
+                updateTransactionCounter();
+
+            } catch (error) {
+                console.error('Process Input Error:', error);
+                livePreview.innerHTML = `<span style="color: #ff4444;">Error: ${error.message}</span>`;
+                livePreview.classList.add('show');
+            }
+        }
+
+        /* Update navigation to include validation */
+        function navigateTransaction(direction) {
+            const newIndex = window.currentTransactionIndex + direction;
+            if (newIndex >= 0 && newIndex < window.transactions.length) {
+                window.currentTransactionIndex = newIndex;
+                const currentTransaction = window.transactions[newIndex];
+                /* Update preview with the new transaction */
+                processInput();
+                updateTransactionCounter();
+            }
+        }
+
     </script>
 
     <!-- Rest of your existing styles and scripts -->
@@ -1429,23 +1648,20 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            width: min(600px, 95%);
+            min-width: 95%;
             margin: 0 auto;
-            padding: 16px;
+            padding: 0;
             gap: 16px;
             background: var(--bg-card);
-            position: relative;
-            overflow: hidden;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
         h1 {
-            font-size: 1.5rem;
+            position: relative;
+            z-index: 12;
+            background: var(--bg-card);
             margin: 0;
-            padding: 8px 0;
-            text-align: center;
-            flex-shrink: 0;
+            padding: 16px;
+            border-bottom: 1px solid var(--bg-input);
         }
 
         .version {
@@ -1454,13 +1670,14 @@
         }
 
         .results-section {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--bg-card);
+            padding: 16px;
+            margin: 0;
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
-            margin-bottom: 16px;
-            background: var(--bg-card);
-            border-radius: 8px;
-            order: 1;
         }
 
         .live-preview {
@@ -1586,7 +1803,6 @@
             font-size: 16px;
             line-height: 1.4;
             margin-bottom: 8px;
-            height: 48px;
             font-family: inherit;
             transition: all 0.2s ease;
         }
@@ -1652,18 +1868,31 @@
 
         /* Mobile Optimizations */
         @media screen and (max-width: 768px) {
+            h1 {
+                display: none;
+            }
+
             .container {
-                width: 90%;
-                min-width: 90%;
-                height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+                height: 100vh;
+                padding: 0;
+            }
+
+            .results-section {
                 padding: 12px;
-                border-radius: 0;
-                box-shadow: none;
+                max-height: calc(100vh - 140px);
+                margin-bottom: 120px;
             }
 
             .input-section {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: var(--bg-card);
                 padding: 12px;
                 padding-bottom: max(12px, env(safe-area-inset-bottom));
+                border-top: 1px solid var(--bg-input);
+                z-index: 100;
             }
 
             .action-buttons {
@@ -1680,14 +1909,12 @@
                 font-size: 16px;
             }
 
-            /* Improve touch targets */
             .nav-button,
             .action-button,
             .date-header {
                 min-height: 44px;
             }
 
-            /* Better spacing for mobile */
             .transaction-card {
                 padding: 12px;
                 margin-bottom: 8px;
@@ -1701,7 +1928,6 @@
                 font-size: 13px;
             }
 
-            /* Improve mobile scrolling */
             .results-section {
                 -webkit-overflow-scrolling: touch;
                 scroll-padding: 20px;
@@ -1915,7 +2141,6 @@
             .edit-modal .editable-input,
             .edit-modal .editable-select {
                 font-size: 16px;
-                /* Prevent zoom on iOS */
                 padding: 12px;
             }
 
@@ -2261,16 +2486,15 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            max-width: 600px;
+            min-width: 95%;
             margin: 0 auto;
-            padding: 16px;
+            padding: 0;
             gap: 16px;
             background: var(--bg-card);
         }
 
         .input-section {
             order: -1;
-            /* Move to top */
             position: relative;
             padding: 16px;
             background: var(--bg-card);
@@ -2391,16 +2615,16 @@
             }
         }
 
-        /* Updated Layout Styles */
         .container {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            max-width: 600px;
+            min-width: 95%;
             margin: 0 auto;
-            padding: 16px;
+            padding: 0;
             gap: 16px;
             background: var(--bg-card);
+            contain: content;
         }
 
         .results-section {
@@ -2409,7 +2633,10 @@
             padding: 0;
             margin-bottom: 16px;
             order: 1;
-            /* Place results at the top */
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--bg-card);
         }
 
         .input-section {
@@ -2420,7 +2647,6 @@
             border-top: 1px solid var(--bg-input);
             margin: 0 -16px -16px;
             order: 2;
-            /* Place input at the bottom */
             z-index: 100;
         }
 
@@ -2604,7 +2830,6 @@
             font-size: 16px;
             line-height: 1.4;
             margin-bottom: 8px;
-            height: 48px;
             font-family: inherit;
             transition: all 0.2s ease;
         }
@@ -2740,184 +2965,21 @@
         /* Mobile Optimizations */
         @media screen and (max-width: 768px) {
             .container {
-                padding: 12px;
+                padding: 0px;
                 height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-            }
-
-            .input-section {
-                padding: 12px;
-                padding-bottom: max(12px, env(safe-area-inset-bottom));
-            }
-
-            .action-buttons {
-                grid-template-columns: 1fr;
-            }
-
-            .transaction-card {
-                padding: 12px;
-            }
-
-            .transaction-actions {
-                flex-direction: column;
-                gap: 8px;
-            }
-
-            .action-button {
-                width: 100%;
-            }
-        }
-
-        /* Keyboard Navigation */
-        .input-wrapper input[type="text"]:focus+.character-count {
-            color: var(--primary-color);
-        }
-
-        *:focus-visible {
-            outline: 2px solid var(--primary-color);
-            outline-offset: 2px;
-        }
-
-        /* Loading States */
-        .action-button.loading {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        .action-button.loading .button-icon {
-            animation: spin 1s linear infinite;
-        }
-
-        /* User Journey Improvements */
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 32px 16px;
-            text-align: center;
-            color: var(--text-muted);
-        }
-
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .empty-state-text {
-            font-size: 14px;
-            line-height: 1.5;
-            max-width: 280px;
-            margin: 0 auto;
-        }
-
-        /* Input Focus States */
-        .input-wrapper input[type="text"] {
-            transition: all 0.2s ease;
-        }
-
-        .input-wrapper input[type="text"]:focus {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Loading and Processing States */
-        .processing {
-            position: relative;
-            pointer-events: none;
-        }
-
-        .processing::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
-            border-radius: inherit;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            color: var(--text-light);
-        }
-
-        /* Feedback Indicators */
-        .confidence-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            background: var(--bg-card);
-        }
-
-        .confidence-high {
-            color: #4CAF50;
-        }
-
-        .confidence-medium {
-            color: #FFC107;
-        }
-
-        .confidence-low {
-            color: #FF5722;
-        }
-
-        /* Help Text */
-        .help-text {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 4px;
-            padding: 0 4px;
-        }
-
-        /* Keyboard Shortcuts */
-        .keyboard-shortcuts {
-            position: absolute;
-            bottom: 8px;
-            right: 8px;
-            font-size: 11px;
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        .keyboard-shortcut {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            margin-left: 8px;
-        }
-
-        .key {
-            padding: 2px 4px;
-            border-radius: 4px;
-            background: var(--bg-input);
-            font-family: monospace;
-        }
-
-        /* Mobile Layout Improvements */
-        @media screen and (max-width: 768px) {
-            body {
-                position: relative;
-                height: 100%;
-                overflow-y: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-
-            .container {
-                width: 90%;
-                min-width: 90%;
-                height: auto;
-                min-height: 100vh;
-                padding: 12px;
                 display: flex;
                 flex-direction: column;
-                border-radius: 0;
-                box-shadow: none;
+            }
+
+            .results-section {
+                position: sticky;
+                top: 0;
+                margin-bottom: 80px;
+                padding-bottom: 0;
+                z-index: 10;
+                flex-shrink: 0;
+                max-height: 60vh;
+                overflow-y: auto;
             }
 
             .input-section {
@@ -2942,28 +3004,20 @@
                 max-height: 80px;
                 padding: 10px;
                 font-size: 16px;
-                /* Prevent zoom on iOS */
                 line-height: 1.3;
                 border-radius: 8px;
             }
 
             .results-section {
                 margin-bottom: 160px;
-                /* Space for input section */
                 padding-bottom: env(safe-area-inset-bottom);
                 overflow-y: visible;
-            }
-
-            /* Adjust when keyboard is visible */
-            .container.keyboard-visible {
-                padding-bottom: 160px;
             }
 
             .input-section.keyboard-visible {
                 position: sticky;
             }
 
-            /* Improve touch targets */
             .action-buttons {
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
@@ -2980,13 +3034,11 @@
                 font-size: 18px;
             }
 
-            /* Improve scrolling */
             .results-section {
                 -webkit-overflow-scrolling: touch;
                 scroll-padding-bottom: 160px;
             }
 
-            /* Better visual hierarchy */
             .live-preview {
                 margin: 8px 0;
                 padding: 10px;
@@ -3122,7 +3174,7 @@
         .live-preview {
             background: var(--bg-input);
             border-radius: 8px 8px 0 0;
-            padding: 12px;
+            padding: 0;
             font-size: 14px;
             color: var(--text-light);
             display: none;
@@ -3140,148 +3192,155 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview-content.incomplete {
+            border: 1px solid #ff4444;
+        }
+
+        .preview-content.incomplete::before {
+            content: '⚠️';
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 16px;
+        }
+
+        .preview-date {
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
 
         .preview-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 16px;
+            display: grid;
+            gap: 8px;
+            padding: 0;
         }
 
         .amount-display {
-            font-size: 1.4em;
+            font-size: 1.6em;
             font-weight: 500;
             color: var(--primary-color);
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .amount-display.incomplete {
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
         }
 
         .preview-details {
-            display: flex;
-            flex-direction: column;
+            display: grid;
             gap: 8px;
-            flex: 1;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         }
 
         .category-tag,
-        .paid-to-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 8px;
+        .paid-to-tag,
+        .description-tag {
+            padding: 8px 12px;
             background: var(--bg-card);
             border-radius: 6px;
-            font-size: 0.9em;
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .tag-icon {
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-
-        .preview-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 8px;
-            border-top: 1px solid var(--bg-card);
-        }
-
-        .confidence-indicator {
+            cursor: pointer;
+            transition: background-color 0.2s;
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 0.85em;
-            color: var(--text-muted);
-        }
-
-        .confidence-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-        }
-
-        .confidence-high {
-            color: #4CAF50;
-        }
-
-        .confidence-medium {
-            color: #FFC107;
-        }
-
-        .confidence-low {
-            color: #FF5722;
-        }
-
-        .feedback-buttons {
-            display: flex;
             gap: 8px;
         }
 
-        .feedback-button {
-            background: var(--bg-card);
-            border: none;
-            color: var(--text-light);
-            width: 28px;
-            height: 28px;
-            border-radius: 14px;
-            cursor: pointer;
+        .tag-incomplete {
+            border: 1px solid #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+
+        .preview-footer {
+            padding: 8px 12px;
+            border-top: 1px solid var(--bg-card);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .validation-summary {
+            font-size: 0.85em;
+            color: #ff4444;
+            padding: 4px 8px;
+            background: rgba(255, 68, 68, 0.1);
+            border-radius: 4px;
+            display: none;
+        }
+
+        .validation-summary.show {
+            display: block;
+        }
+
+        .amount-input-wrapper {
+            position: relative;
             display: flex;
             align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, background-color 0.2s;
+            gap: 8px;
         }
 
-        .feedback-button:hover {
-            transform: translateY(-1px);
+        .currency-label {
+            color: var(--text-muted);
+            font-size: 14px;
         }
 
-        .feedback-button.positive:hover {
-            background: #4CAF50;
+        .editable-input,
+        .editable-select {
+            background: var(--bg-input);
+            color: var(--text-light);
+            border: 1px solid var(--bg-card);
+            border-radius: 6px;
+            font-size: 16px;
+            width: 100%;
+            transition: border-color 0.2s;
         }
 
-        .feedback-button.negative:hover {
-            background: #FF5722;
+        .editable-input:focus,
+        .editable-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
         }
 
-        /* Update mobile styles */
-        @media screen and (max-width: 480px) {
-            .preview-main {
-                flex-direction: column;
-                gap: 12px;
-            }
-
-            .preview-details {
-                width: 100%;
-            }
-
-            .category-tag,
-            .paid-to-tag {
-                width: 100%;
-            }
+        .editable-select option {
+            background: var(--bg-dark);
+            color: var(--text-light);
         }
 
-        /* Update the collapsible header styles */
-        .collapsible-header::after {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            transition: transform 0.3s ease;
+        /* Improve date input appearance */
+        input[type="date"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--bg-input);
+            color: var(--text-light);
+            padding: 8px 12px;
+            border: 1px solid var(--bg-card);
+            border-radius: 6px;
         }
 
-        .collapsible-section.collapsed .collapsible-header::after {
-            transform: translateY(-50%) rotate(-90deg);
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
         }
 
-        .live-preview {
-            position: relative;
-            padding: 16px;
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
+
     </style>
 </head>
 
@@ -3312,7 +3371,7 @@
         <div class="input-section">
             <div class="input-wrapper">
                 <input type="text" id="inputText" autofocus placeholder="Type expense (e.g., 'gave irene 50k for home')"
-                    style="width: 100%; padding: 12px; background: var(--bg-input); color: var(--text-light); border: none; border-radius: 8px; font-size: 16px; line-height: 1.4; margin-bottom: 8px; height: 48px;">
+                    style="width: 100%; padding: 12px; background: var(--bg-input); color: var(--text-light); border: none; border-radius: 8px; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
             </div>
             <div class="action-buttons">
                 <button class="primary-button" onclick="submitTransaction()">
